@@ -26,7 +26,7 @@ pub async fn request() -> Result<()> {
     headers.insert(header::AUTHORIZATION, auth_value);
     headers.insert(
         header::USER_AGENT,
-        header::HeaderValue::from_str("request").unwrap(),
+        header::HeaderValue::from_str("quffaro").unwrap(),
     );
     // TODO use user_agent function?
 
@@ -52,18 +52,17 @@ pub async fn request() -> Result<()> {
         .json::<serde_json::Value>()
         .await?;
 
-    println!(
-        "{:#?}",
-        response
-            .get(0)
-            .and_then(|v| v.get("commit"))
-            .and_then(|v| v.get("committer"))
-            .and_then(|v| v.get("date"))
-            .unwrap()
-    );
-
+    response
+        .get(0)
+        .and_then(|v| v.get("commit"))
+        .and_then(|v| v.get("committer"))
+        .and_then(|v| v.get("date"))
+        .unwrap();
+    //UTC time, ISO 8601
     Ok(())
 }
+
+// pub fn get_last_commit(repo: String) -> Result<Response> {}
 
 // fn update_project_commit() -> Result<(), rusqlite::Error> {
 //     let conn = Connection::open("projects.db")?;

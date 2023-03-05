@@ -1,8 +1,6 @@
 // TODO:
 // [] call github to see last push
 // [] search TODO in directory
-//
-
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -530,20 +528,6 @@ fn write_tmp_to_project(tmp: &TmpGitPath) -> Result<(), rusqlite::Error> {
 
     Ok(())
 }
-
-// TODO be replaced by query
-// pub fn fetch_configs() -> Vec<String> {
-//     let expanded_path = shellexpand::tilde("~/Documents/");
-//     let pattern: PathBuf = [&expanded_path, "**/.git/config"].iter().collect();
-
-//     let tmp: Vec<String> = glob(pattern.to_str().unwrap())
-//         .expect("expectation!!")
-//         .filter_map(|x| x.ok())
-//         .map(|x| x.into_os_string().into_string().unwrap())
-//         .collect();
-
-//     tmp
-// }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
