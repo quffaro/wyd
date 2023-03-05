@@ -3,8 +3,8 @@
 // path parameters:
 // > owner (string)
 // > repo (string)
-
 use reqwest::{header, ClientBuilder, Result};
+use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
 use std::time::Duration;
@@ -46,18 +46,27 @@ pub async fn request() -> Result<()> {
         .build()?;
     let response = client
         .get(&request_url)
+        .query(&[("per_page", 1)])
         .send()
         .await?
         .json::<serde_json::Value>()
         .await?;
 
-    println!("{:#?}", response);
-
-    // if response.status().is_success() {
-    //     println!("{:#?} is a user!", response.json().await?);
-    // } else {
-    //     println!("{:#?} is not a user!", response.status());
-    // }
+    println!(
+        "{:#?}",
+        response
+            .get(0)
+            .and_then(|v| v.get("commit"))
+            .and_then(|v| v.get("committer"))
+            .and_then(|v| v.get("date"))
+            .unwrap()
+    );
 
     Ok(())
 }
+
+// fn update_project_commit() -> Result<(), rusqlite::Error> {
+//     let conn = Connection::open("projects.db")?;
+
+//     conn.execute("select");
+// }

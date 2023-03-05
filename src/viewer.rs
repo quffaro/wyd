@@ -98,6 +98,7 @@ impl TmpGitPathTable {
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
+                // move project db commit to popup toggle
                 update_tmp(&self.items[i]);
             } else {
                 continue;
@@ -132,13 +133,13 @@ struct ProjectTable {
 }
 
 impl ProjectTable {
-    fn new(items: Vec<Project>) -> ProjectTable {
+    fn load() -> ProjectTable {
         ProjectTable {
-            items,
+            items: read_projects().unwrap(),
             state: TableState::default(),
         }
     }
-    fn load() -> ProjectTable {
+    fn reload(&mut self) -> ProjectTable {
         ProjectTable {
             items: read_projects().unwrap(),
             state: TableState::default(),
@@ -203,6 +204,10 @@ impl App {
             projects: ProjectTable::load(),
         }
     }
+    fn reload(&mut self) {
+        self.projects.reload();
+        self.message = "Refreshed!".to_owned();
+    }
     fn next(&mut self) {
         if self.selected_window == 1 {
             self.configs.next()
@@ -223,6 +228,7 @@ impl App {
             self.selected_window = 1
         } else {
             self.selected_window = 0;
+            self.projects.reload();
             self.configs.unselect();
             // TODO write new projects
         }
@@ -280,6 +286,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     }
                 }
                 KeyCode::Char('p') => app.popup_configs(),
+                KeyCode::Char('r') => app.reload(),
                 KeyCode::Enter => app.toggle(),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
@@ -409,7 +416,7 @@ fn render_paths<'a>(app: &App) -> Table<'a> {
     let title = format!(
         "{} {}/{}",
         "Possible",
-        app.configs.state.selected().unwrap() + 1,
+        app.configs.state.selected().map_or_else(|| 0, |x| x + 1),
         rows.len()
     );
 
