@@ -5,19 +5,6 @@ use rusqlite::{Connection, Result};
 use shellexpand;
 use std::{env, io, path::PathBuf};
 
-// #[derive(Clone, Debug)]
-// struct TmpGitPath {
-//     path: String,
-//     is_selected: bool,
-// }
-
-// fn to_tgp(x: PathBuf) -> TmpGitPath {
-//     TmpGitPath {
-//         id: 0,
-//         path: x.into_os_string().into_string().unwrap(),
-//     }
-// }
-
 // TODO need to find config files _not in projects._ We'll need our own table
 pub fn initialize() -> Result<()> {
     let expanded_path = shellexpand::tilde("~/Documents/");
@@ -49,12 +36,6 @@ fn write_tmp(tmp: Vec<String>) -> Result<()> {
     )
     .expect("Failed");
 
-    // for x in tmp {
-    //     conn.execute(
-    //         "INSERT INTO tmp_git_config (path, is_selected) VALUES (?1, ?2)",
-    //         (&x.path, &x.is_selected.to_string()),
-    //     )
-    // }
     let mut stmt = conn.prepare("INSERT INTO tmp_git_config (path) VALUES (?)")?;
     for x in tmp {
         stmt.execute([x])?;
@@ -63,16 +44,3 @@ fn write_tmp(tmp: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-// fn read_tmp() -> Result<Vec<TmpGitPath>> {
-//     let conn = Connection::open("projects.db")?;
-
-//     let mut stmt = conn.prepare("SELECT path FROM tmp_git_config")?;
-//     let tgp_iter = stmt.query_map([], |row| {
-//         Ok(TmpGitPath {
-//             id: row.get(0)?,
-//             path: row.get(1)?,
-//         })
-//     })?;
-
-//     tgp_iter
-// }

@@ -1,10 +1,9 @@
-// call github to get most recent commits
-// /repos/{owner}/{repo}/commits
-// path parameters:
-// > owner (string)
-// > repo (string)
+/// call github to get most recent commits
+/// /repos/{owner}/{repo}/commits
+/// path parameters:
+/// > owner (string)
+/// > repo (string)
 use reqwest::{header, ClientBuilder, Result};
-use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
 use std::time::Duration;

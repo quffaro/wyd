@@ -6,23 +6,19 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use regex::Regex;
-// use git2::{Commit, ObjectType, Repository};
-use git2::{Config, Error, Repository};
-use glob::{glob, Paths, PatternError};
 use rusqlite::Connection;
-use shellexpand;
-use std::{fmt, io, path::PathBuf};
+use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{
-        Block, BorderType, Borders, Cell, Clear, ListState, Paragraph, Row, Table, TableState,
+        Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState,
     },
     Frame, Terminal,
 };
 
+// TODO move to config 
 const SEARCH_DIRECTORY_PREFIX: &str = "/home/cuffaro/Documents";
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -44,6 +40,12 @@ struct TmpGitPath {
 }
 
 #[derive(Clone, Debug)]
+struct TableItems<T> {
+    items: Vec<T>,
+    state: TableState
+}
+
+#[derive(Clone, Debug)]
 struct TmpGitPathTable {
     items: Vec<TmpGitPath>,
     state: TableState,
@@ -62,6 +64,7 @@ impl TmpGitPathTable {
             state: TableState::default(),
         }
     }
+    // should we generalize 
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
