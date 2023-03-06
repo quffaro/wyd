@@ -1,8 +1,6 @@
-mod initialize;
-mod request;
-mod viewer;
+mod other;
 fn main() {
-    initialize::initialize();
-    // viewer::viewer();
-    request::request();
+    other::initialize::initialize();
+    other::viewer::viewer();
+    // request::request();
 }

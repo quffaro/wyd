@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
 use std::time::Duration;
+// use terminal_spinners::{SpinnerBuilder, DOTS};
 use tokio;
 
 #[derive(Deserialize, Debug)]
@@ -16,7 +17,7 @@ struct Commit {
 }
 
 #[tokio::main]
-pub async fn request() -> Result<()> {
+pub async fn request() -> Result<serde_json::Value> {
     let mut secret = fs::read_to_string("../pat/nav_pat.txt").expect("A");
     secret.pop();
 
@@ -30,7 +31,7 @@ pub async fn request() -> Result<()> {
     );
     // TODO use user_agent function?
 
-    println!("{:#?}", headers);
+    // println!("{:#?}", headers);
     let owner = "rust-lang";
     let repo = "cargo";
     let request_url = format!(
@@ -40,6 +41,10 @@ pub async fn request() -> Result<()> {
     );
 
     // let timeout = Duration::new(5, 0);
+    // let handle = SpinnerBuilder::new()
+    //     .spinner(&DOTS)
+    //     .text("Loading...")
+    //     .start();
     let client = ClientBuilder::new()
         .default_headers(headers)
         // .timeout(timeout)
@@ -51,15 +56,18 @@ pub async fn request() -> Result<()> {
         .await?
         .json::<serde_json::Value>()
         .await?;
+    // handle.done();
 
-    response
+    // TODO we need error handling!!!
+    Ok(response
         .get(0)
         .and_then(|v| v.get("commit"))
         .and_then(|v| v.get("committer"))
         .and_then(|v| v.get("date"))
-        .unwrap();
+        .unwrap())
+    .cloned()
     //UTC time, ISO 8601
-    Ok(())
+    // Ok(())
 }
 
 // pub fn get_last_commit(repo: String) -> Result<Response> {}
