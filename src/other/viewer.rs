@@ -6,12 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-// use regex::Regex;
-// use git2::{Commit, ObjectType, Repository};
-// use git2::{Config, Error, Repository};
-// use glob::{glob, Paths, PatternError};
 use rusqlite::Connection;
-// use shellexpand;
 use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -35,6 +30,12 @@ impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+#[derive(Clone,Debug)]
+struct TableItems<T> {
+    items: Vec<T>,
+    state: TableState
 }
 
 #[derive(Clone, Debug)]
@@ -123,9 +124,9 @@ impl Project {
             self.status = Status::Stable
         }
     }
-    fn get_last_commit(&mut self) {
-        self.last_commit = crate::other::request::request().unwrap().to_string()
-    }
+    // fn get_last_commit(&mut self) {
+    //     self.last_commit = crate::other::request::request().unwrap().to_string()
+    // }
 }
 
 #[derive(Clone, Debug)]
@@ -460,7 +461,8 @@ fn read_projects() -> Result<Vec<Project>, rusqlite::Error> {
                     name: row.get(1)?,
                     cat: "".to_string(),
                     status: Status::Stable,
-                    last_commit: crate::other::request::request().unwrap().to_string(),
+                    last_commit: "Awaiting work to finish".to_owned(),
+                    // last_commit: crate::other::request::request().unwrap().to_string(),
                     // if row.get(5)? == Status::Stable.to_string() {
                     // Status::Stable
                     // } else {

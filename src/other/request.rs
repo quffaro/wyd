@@ -4,11 +4,9 @@
 // > owner (string)
 // > repo (string)
 use reqwest::{header, ClientBuilder, Result};
-use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
 use std::time::Duration;
-// use terminal_spinners::{SpinnerBuilder, DOTS};
 use tokio;
 
 #[derive(Deserialize, Debug)]
@@ -40,14 +38,14 @@ pub async fn request() -> Result<serde_json::Value> {
         repo = repo
     );
 
-    // let timeout = Duration::new(5, 0);
+    let timeout = Duration::new(5, 0);
     // let handle = SpinnerBuilder::new()
     //     .spinner(&DOTS)
     //     .text("Loading...")
     //     .start();
     let client = ClientBuilder::new()
         .default_headers(headers)
-        // .timeout(timeout)
+        .timeout(timeout)
         .build()?;
     let response = client
         .get(&request_url)
@@ -69,11 +67,3 @@ pub async fn request() -> Result<serde_json::Value> {
     //UTC time, ISO 8601
     // Ok(())
 }
-
-// pub fn get_last_commit(repo: String) -> Result<Response> {}
-
-// fn update_project_commit() -> Result<(), rusqlite::Error> {
-//     let conn = Connection::open("projects.db")?;
-
-//     conn.execute("select");
-// }
