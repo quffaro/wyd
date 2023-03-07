@@ -1,9 +1,9 @@
-mod initialize;
-mod request;
-mod viewer;
+#![feature(result_cloned)]
+
+
+mod other;
 fn main() {
-    /// this populates the tmp table with config files
-    initialize::initialize();
-    viewer::viewer();
-    // request::request();
+    other::initialize::initialize();
+    other::viewer::viewer();
+    request::request();
 }

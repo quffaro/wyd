@@ -33,6 +33,12 @@ impl fmt::Display for Status {
     }
 }
 
+#[derive(Clone,Debug)]
+struct TableItems<T> {
+    items: Vec<T>,
+    state: TableState
+}
+
 #[derive(Clone, Debug)]
 struct TmpGitPath {
     path: String,
@@ -115,6 +121,7 @@ struct Project {
     path: String,
     cat: String,
     status: Status,
+    last_commit: String,
 }
 
 impl Project {
@@ -125,6 +132,9 @@ impl Project {
             self.status = Status::Stable
         }
     }
+    // fn get_last_commit(&mut self) {
+    //     self.last_commit = crate::other::request::request().unwrap().to_string()
+    // }
 }
 
 #[derive(Clone, Debug)]
@@ -185,6 +195,7 @@ impl ProjectTable {
             }
         }
     }
+    // TODO get last commits
 }
 
 struct App {
@@ -206,8 +217,8 @@ impl App {
         }
     }
     fn reload(&mut self) {
-        self.projects.reload();
-        self.message = "Refreshed!".to_owned();
+        // self.projects.reload();
+        self.message = format!("{:#?}", self.projects.items)
     }
     fn next(&mut self) {
         if self.selected_window == 1 {
@@ -309,8 +320,8 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 // table
                 Constraint::Percentage(50),
                 // todo list
-                Constraint::Percentage(25),
-                Constraint::Percentage(15),
+                Constraint::Percentage(40),
+                // Constraint::Percentage(15),
             ]
             .as_ref(),
         )
@@ -327,6 +338,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 .border_type(BorderType::Plain),
         );
 
+    // TODO LIST
     let msg = Paragraph::new(greeting)
         .style(Style::default().fg(Color::LightCyan))
         .block(
@@ -340,6 +352,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     rect.render_widget(title, chunks[0]);
     let projects = render_projects(&app);
     rect.render_stateful_widget(projects, chunks[1], &mut app.projects.state);
+    rect.render_widget(msg, chunks[2]);
 
     if app.show_popup {
         let block = render_paths(&app);
@@ -361,6 +374,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 Cell::from(p.path.clone()),
                 Cell::from(p.cat.clone()),
                 Cell::from(p.status.to_string().clone()),
+                Cell::from(p.last_commit.clone()),
             ])
         })
         .collect();
@@ -382,7 +396,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .widths(&[
             Constraint::Length(40),
             Constraint::Length(50),
-            Constraint::Length(10),
+            Constraint::Length(05),
+            Constraint::Length(20),
             Constraint::Length(20),
         ])
         .highlight_style(
@@ -453,11 +468,14 @@ fn read_projects() -> Result<Vec<Project>, rusqlite::Error> {
                     path: row.get(0)?,
                     name: row.get(1)?,
                     cat: "".to_string(),
-                    status: Status::Stable, // if row.get(5)? == Status::Stable.to_string() {
-                                            // Status::Stable
-                                            // } else {
-                                            // Status::Unstable
-                                            // },
+                    status: Status::Stable,
+                    last_commit: "Awaiting work to finish".to_owned(),
+                    // last_commit: crate::other::request::request().unwrap().to_string(),
+                    // if row.get(5)? == Status::Stable.to_string() {
+                    // Status::Stable
+                    // } else {
+                    // Status::Unstable
+                    // },
                 })
             }
         })
