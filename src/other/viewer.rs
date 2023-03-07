@@ -1,28 +1,28 @@
 // TODO:
 // [] call github to see last push
 // [] search TODO in directory
+// [] press a to add project in current directory
+use crate::other::sql;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rusqlite::Connection;
+use std::ops::Add;
 use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{
-        Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState,
-    },
+    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
+use wyd::SEARCH_DIRECTORY_PREFIX;
 
-// TODO move to config 
-const SEARCH_DIRECTORY_PREFIX: &str = "/home/cuffaro/Documents";
+use super::sql::{read_project, read_tmp, write_tmp_to_project};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-enum Status {
+pub enum Status {
     Stable,
     Unstable,
 }
@@ -33,45 +33,14 @@ impl fmt::Display for Status {
     }
 }
 
-#[derive(Clone,Debug)]
-struct TableItems<T> {
-    items: Vec<T>,
-    state: TableState
-}
-
-#[derive(Clone, Debug)]
-struct TmpGitPath {
-    path: String,
-    is_selected: bool,
-}
-
 #[derive(Clone, Debug)]
 struct TableItems<T> {
     items: Vec<T>,
-    state: TableState
-}
-
-#[derive(Clone, Debug)]
-struct TmpGitPathTable {
-    items: Vec<TmpGitPath>,
     state: TableState,
 }
 
-impl TmpGitPathTable {
-    fn new(items: Vec<TmpGitPath>) -> TmpGitPathTable {
-        TmpGitPathTable {
-            items,
-            state: TableState::default(),
-        }
-    }
-    fn load() -> TmpGitPathTable {
-        TmpGitPathTable {
-            items: read_tmp().unwrap(),
-            state: TableState::default(),
-        }
-    }
-    // should we generalize 
-    pub fn next(&mut self) {
+impl<T> TableItems<T> {
+    fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -84,7 +53,7 @@ impl TmpGitPathTable {
         };
         self.state.select(Some(i));
     }
-    pub fn previous(&mut self) {
+    fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -97,16 +66,32 @@ impl TmpGitPathTable {
         };
         self.state.select(Some(i));
     }
-    pub fn unselect(&mut self) {
+    fn unselect(&mut self) {
         self.state.select(None);
     }
-    pub fn toggle(&mut self) {
+}
+
+#[derive(Clone, Debug)]
+pub struct GitConfig {
+    pub path: String,
+    pub is_selected: bool,
+}
+
+impl TableItems<GitConfig> {
+    fn new() -> TableItems<GitConfig> {
+        TableItems {
+            // items: Vec::<GitConfig>::new(),
+            items: read_tmp().unwrap(),
+            state: TableState::default(),
+        }
+    }
+    fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
                 // move project db commit to popup toggle
-                update_tmp(&self.items[i]);
+                sql::write_tmp_to_project(&self.items[i]);
             } else {
                 continue;
             }
@@ -114,96 +99,52 @@ impl TmpGitPathTable {
     }
 }
 
-// item on the list
 #[derive(Debug, Clone)]
-struct Project {
-    name: String,
-    path: String,
-    cat: String,
-    status: Status,
-    last_commit: String,
+pub struct Project {
+    pub id: u8,
+    pub path: String,
+    pub name: String,
+    pub category: String,
+    pub status: Status,
+    pub last_commit: String,
 }
 
 impl Project {
-    pub fn change_status(&mut self) {
-        if self.status == Status::Stable {
-            self.status = Status::Unstable
-        } else {
-            self.status = Status::Stable
+    fn cycle_status(&mut self) {
+        self.status = match self.status {
+            Status::Stable => Status::Unstable,
+            Status::Unstable => Status::Stable,
+            _ => Status::Unstable,
         }
     }
-    // fn get_last_commit(&mut self) {
-    //     self.last_commit = crate::other::request::request().unwrap().to_string()
-    // }
 }
 
-#[derive(Clone, Debug)]
-struct ProjectTable {
-    items: Vec<Project>,
-    state: TableState,
-}
-
-impl ProjectTable {
-    fn load() -> ProjectTable {
-        ProjectTable {
-            items: read_projects().unwrap(),
+impl TableItems<Project> {
+    fn new() -> TableItems<Project> {
+        TableItems {
+            // items: Vec::<Project>::new(),
+            items: read_project().unwrap(),
             state: TableState::default(),
         }
     }
-    fn reload(&mut self) -> ProjectTable {
-        ProjectTable {
-            items: read_projects().unwrap(),
-            state: TableState::default(),
-        }
-    }
-    pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-    pub fn unselect(&mut self) {
-        self.state.select(None);
-    }
-    pub fn toggle(&mut self) {
+    fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                self.items[i].change_status();
+                self.items[i].cycle_status();
             } else {
                 continue;
             }
         }
     }
-    // TODO get last commits
 }
 
 struct App {
     show_popup: bool,
     selected_window: u8,
     message: String,
-    configs: TmpGitPathTable,
-    projects: ProjectTable,
+    configs: TableItems<GitConfig>,
+    projects: TableItems<Project>,
 }
 
 impl App {
@@ -211,46 +152,44 @@ impl App {
         App {
             show_popup: false,
             selected_window: 0,
-            message: "hiii".to_string(),
-            configs: TmpGitPathTable::load(),
-            projects: ProjectTable::load(),
+            // message: "hiii".to_owned(),
+            message: Vec::<Project>::new().len().to_string(),
+            configs: TableItems::<GitConfig>::new(),
+            projects: TableItems::<Project>::new(),
         }
     }
-    fn reload(&mut self) {
-        // self.projects.reload();
-        self.message = format!("{:#?}", self.projects.items)
-    }
     fn next(&mut self) {
-        if self.selected_window == 1 {
-            self.configs.next()
-        } else {
-            self.projects.next()
+        match self.selected_window {
+            0 => self.configs.next(),
+            1 => self.configs.next(),
+            _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
-        if self.selected_window == 1 {
-            self.configs.previous()
-        } else {
-            self.projects.previous()
+        match self.selected_window {
+            0 => self.configs.previous(),
+            1 => self.configs.previous(),
+            _ => self.configs.previous(),
         }
     }
-    fn popup_configs(&mut self) {
+    fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
             self.selected_window = 1
         } else {
-            self.selected_window = 0;
-            self.projects.reload();
-            self.configs.unselect();
-            // TODO write new projects
+            self.selected_window = 0
+            // write_tmp_to_project();
         }
     }
+    fn default_select(&mut self) {
+        self.projects.state.select(Some(0));
+        self.configs.state.select(Some(0));
+    }
     fn toggle(&mut self) {
-        if self.selected_window == 1 {
-            self.configs.toggle();
-        } else {
-            self.message = self.projects.items.len().to_string();
-            self.projects.toggle();
+        match self.selected_window {
+            0 => self.projects.toggle(),
+            1 => self.configs.toggle(),
+            _ => self.configs.toggle(),
         }
     }
 }
@@ -281,8 +220,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
-    app.projects.state.select(Some(0));
-    app.configs.state.select(Some(0));
+    app.default_select();
     // draw
     loop {
         terminal.draw(|rect| ui(rect, &mut app))?;
@@ -297,8 +235,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         return Ok(());
                     }
                 }
-                KeyCode::Char('p') => app.popup_configs(),
-                KeyCode::Char('r') => app.reload(),
+                KeyCode::Char('p') => app.popup(),
+                // KeyCode::Char('r') => app.reload(),
                 KeyCode::Enter => app.toggle(),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
@@ -308,6 +246,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     }
 }
 
+//
 fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     let size = rect.size();
     let chunks = Layout::default()
@@ -349,13 +288,24 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 .border_type(BorderType::Plain),
         );
 
+    // chunk 0: title
     rect.render_widget(title, chunks[0]);
-    let projects = render_projects(&app);
-    rect.render_stateful_widget(projects, chunks[1], &mut app.projects.state);
+
+    // chunk 1: projects
+    if app.projects.items.len() == 0 {
+        let no_projects = render_no_projects(&app);
+        rect.render_widget(no_projects, chunks[1]);
+    } else {
+        let projects = render_projects(&app);
+        rect.render_stateful_widget(projects, chunks[1], &mut app.projects.state);
+    }
+
+    // chunk 2: todo list
     rect.render_widget(msg, chunks[2]);
 
+    // popup
     if app.show_popup {
-        let block = render_paths(&app);
+        let block = render_config_paths(&app);
         // Block::default().title("Initialize").borders(Borders::ALL);
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
@@ -363,6 +313,27 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     };
 }
 
+fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
+    let msg = "Press `p` to add projects".to_owned();
+    let no_projects = Paragraph::new(msg)
+        .style(
+            Style::default()
+                .fg(Color::LightCyan)
+                .add_modifier(Modifier::ITALIC),
+        )
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White))
+                .title("(Projects)")
+                .border_type(BorderType::Plain),
+        );
+
+    no_projects
+}
+
+// render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
         .projects
@@ -372,7 +343,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Row::new(vec![
                 Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "").clone()),
                 Cell::from(p.path.clone()),
-                Cell::from(p.cat.clone()),
+                Cell::from(p.category.clone()),
                 Cell::from(p.status.to_string().clone()),
                 Cell::from(p.last_commit.clone()),
             ])
@@ -410,12 +381,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol(">> ");
+        .highlight_symbol(">>");
 
     projects
 }
 
-fn render_paths<'a>(app: &App) -> Table<'a> {
+// render paths
+fn render_config_paths<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
         .configs
         .items
@@ -451,103 +423,9 @@ fn render_paths<'a>(app: &App) -> Table<'a> {
                 .bg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol(">> ");
+        .highlight_symbol(">>");
 
     paths
-}
-
-// use this i think
-fn read_projects() -> Result<Vec<Project>, rusqlite::Error> {
-    let conn = Connection::open("projects.db")?;
-
-    let mut stmt = conn.prepare("select path, name from project")?;
-    let tgp = stmt
-        .query_map([], |row| {
-            {
-                Ok(Project {
-                    path: row.get(0)?,
-                    name: row.get(1)?,
-                    cat: "".to_string(),
-                    status: Status::Stable,
-                    last_commit: "Awaiting work to finish".to_owned(),
-                    // last_commit: crate::other::request::request().unwrap().to_string(),
-                    // if row.get(5)? == Status::Stable.to_string() {
-                    // Status::Stable
-                    // } else {
-                    // Status::Unstable
-                    // },
-                })
-            }
-        })
-        .expect("query failed")
-        .collect();
-
-    tgp
-}
-
-fn read_tmp() -> Result<Vec<TmpGitPath>, rusqlite::Error> {
-    let conn = Connection::open("projects.db")?;
-
-    let mut stmt =
-        conn.prepare("select path, is_selected from tmp_git_config where is_selected = 0")?;
-    let tgp = stmt
-        .query_map([], |row| {
-            Ok(TmpGitPath {
-                path: row.get(0)?,
-                is_selected: row.get(1)?,
-            })
-        })?
-        .collect();
-
-    tgp
-}
-
-fn update_tmp(tmp: &TmpGitPath) -> Result<(), rusqlite::Error> {
-    let conn = Connection::open("projects.db")?;
-
-    conn.execute(
-        "update tmp_git_config set is_selected = ?1 where path = ?2;",
-        (&tmp.is_selected, &tmp.path),
-    )
-    .expect("A");
-
-    write_tmp_to_project(&tmp)
-    // Ok(())
-    // TODO might need to default items
-}
-
-fn write_tmp_to_project(tmp: &TmpGitPath) -> Result<(), rusqlite::Error> {
-    let conn = Connection::open("projects.db")?;
-    // match Regex::new(r#"/^(.+)\/([^\/]+)$/gm"#) {
-    //     Ok(r) => {
-    //         let re = r;
-    //     }
-    //     Err(e) => {
-    //         let path = "error.txt";
-    //         let mut output = File::create(path).unwrap();
-    //         write!(output, "{}", format!("{:?}", e))
-    //     }
-    // }
-
-    let mut stmt = conn.prepare(
-        "insert or replace into project (path,name,cat,status) values (?1, ?2, ?3, ?4);",
-    )?;
-    // for x in &tmp {
-    // TODO get name of parent directory
-    // let caps = re.captures(&tmp.path).unwrap();
-    stmt.execute([
-        &tmp.path,
-        &tmp.path,
-        // &caps.get(1).map_or("", |m| m.as_str()).to_owned(),
-        // .map_or(&"".to_owned(), |m| &m.as_str().to_string()),
-        &"Unknown".to_owned(),
-        &"Unstable".to_owned(),
-    ])
-    .expect("A");
-    // }
-    // println!("HELLO");
-
-    Ok(())
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
