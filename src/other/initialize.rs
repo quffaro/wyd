@@ -1,14 +1,15 @@
 // look through ~ and find .git files. stop recursing that directory when a .git file is found and
 // return its path
-use glob::{glob, Paths, PatternError};
+use glob::{glob};
 use rusqlite::{Connection, Result};
 use shellexpand;
-use std::{env, io, path::PathBuf};
+use std::path::PathBuf;
+use wyd::{CONFIG_SEARCH_PREFIX, CONFIG_PATH_SUFFIX, DATABASE};
 
 // TODO need to find config files _not in projects._ We'll need our own table
 pub fn initialize() -> Result<()> {
-    let expanded_path = shellexpand::tilde("~/Documents/");
-    let pattern: PathBuf = [&expanded_path, "**/.git/config"].iter().collect();
+    let expanded_path = shellexpand::tilde(CONFIG_SEARCH_PREFIX);
+    let pattern: PathBuf = [&expanded_path, CONFIG_PATH_SUFFIX].iter().collect();
 
     let tmp: Vec<String> = glob(pattern.to_str().unwrap())
         .expect("expectation!!")
@@ -17,7 +18,7 @@ pub fn initialize() -> Result<()> {
             x.into_os_string()
                 .into_string()
                 .unwrap()
-                .replace("/.git/config", "")
+                .replace(CONFIG_PATH_SUFFIX, "")
         })
         // .map(|x| to_tgp(x))
         .collect();
@@ -28,7 +29,7 @@ pub fn initialize() -> Result<()> {
 
 // fn tmp_git_config
 fn write_tmp(tmp: Vec<String>) -> Result<()> {
-    let conn = Connection::open("projects.db")?;
+    let conn = Connection::open(DATABASE)?;
 
     conn.execute(
         "create table if not exists tmp_git_config (path varchar(255) not null primary key, is_selected tinyint(1) default 0);",

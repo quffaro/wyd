@@ -82,17 +82,12 @@ fn load_items() -> Vec<Project> {
     ]
 }
 
-
-        
-
 struct App {
     show_popup: bool,
     selected_window: u8,
     message: String,
     configs: TableState,
     table: TableState,
-    // TODO rename items with projects
-    items: Vec<Project>,
 }
 
 impl App {
@@ -103,7 +98,6 @@ impl App {
             message: "0".to_string(),
             configs: TableState::default(),
             table: TableState::default(),
-            items: load_items(),
         }
     }
     fn next(&mut self) {
