@@ -19,7 +19,7 @@ use tui::{
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
 
-use super::sql::{read_project, read_tmp, write_tmp_to_project};
+use super::sql::{read_project, read_tmp, update_tmp, write_tmp_to_project};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
@@ -91,7 +91,7 @@ impl TableItems<GitConfig> {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
                 // move project db commit to popup toggle
-                sql::write_tmp_to_project(&self.items[i]);
+                sql::update_tmp(&self.items[i]);
             } else {
                 continue;
             }
@@ -277,17 +277,6 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 .border_type(BorderType::Plain),
         );
 
-    // TODO LIST
-    let msg = Paragraph::new(greeting)
-        .style(Style::default().fg(Color::LightCyan))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .title("(pwd)")
-                .border_type(BorderType::Plain),
-        );
-
     // chunk 0: title
     rect.render_widget(title, chunks[0]);
 
@@ -301,6 +290,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     }
 
     // chunk 2: todo list
+    let msg = render_todo();
     rect.render_widget(msg, chunks[2]);
 
     // popup
@@ -453,4 +443,29 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             .as_ref(),
         )
         .split(popup_layout[1])[1]
+}
+
+fn render_todo() -> (List<'a>, List<'a>) {
+
+    let list_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+            Constraint::Percentage(50),
+            Constraint::(Percentage(50)),
+            ].as_ref(),
+        )
+        .split(r);
+
+    Layout::default
+
+    Paragraph::new(greeting)
+        .style(Style::default().fg(Color::LightCyan))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White))
+                .title("(pwd)")
+                .border_type(BorderType::Plain),
+        );
 }

@@ -48,7 +48,7 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
     res
 }
 
-fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
+pub fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
     conn.execute(
@@ -80,15 +80,16 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
     // for x in &tmp {
     // TODO get name of parent directory
     // let caps = re.captures(&tmp.path).unwrap();
-    stmt.execute([
-        &tmp.path,
-        &tmp.path,
-        // &caps.get(1).map_or("", |m| m.as_str()).to_owned(),
-        // .map_or(&"".to_owned(), |m| &m.as_str().to_string()),
-        &"Unknown".to_owned(),
-        &"Unstable".to_owned(),
-    ])
-    .expect("A");
+
+    // stmt.execute([
+    //     &tmp.path,
+    //     &tmp.path,
+    //     // &caps.get(1).map_or("", |m| m.as_str()).to_owned(),
+    //     // .map_or(&"".to_owned(), |m| &m.as_str().to_string()),
+    //     &"Unknown".to_owned(),
+    //     &"Unstable".to_owned(),
+    // ])
+    // .expect("A");
     // }
     // println!("HELLO");
 
