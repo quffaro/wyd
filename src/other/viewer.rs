@@ -35,9 +35,9 @@ impl fmt::Display for Status {
 }
 
 pub trait ListNavigate {
-    fn get_items_len<'a>(&'a self) -> u8; 
-    fn get_state_selected<'a>(&'a self) -> u8;
-    fn select_state<'a>(&'a mut self, idx: u8);
+    fn get_items_len<'a>(&'a self) -> usize; 
+    fn get_state_selected<'a>(&'a self) -> Option<usize>;
+    fn select_state<'a>(&'a mut self, idx: Option<usize>);
     //
     fn next(&mut self) {
         let i = match self.get_state_selected() {
@@ -50,23 +50,23 @@ pub trait ListNavigate {
             }
             None => 0,
         };
-        self.select_state(i);
+        self.select_state(Some(i));
     }
     fn previous(&mut self) {
-        let i = match self.state.selected() {
+        let i = match self.get_state_selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.get_items_len() - 1
                 } else {
                     i - 1
                 }
             }
             None => 0,
         };
-        self.state.select(Some(i));
+        self.select_state(Some(i));
     }
     fn unselect(&mut self) {
-        self.state.select(None);
+        self.select_state(None);
     }
 }
 
@@ -84,39 +84,17 @@ struct TableItems<T> {
     state: TableState,
 }
 
-impl<T> TableItems<T> {
-    fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
+impl<T> ListNavigate for TableItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
     }
-    fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
     }
-    fn unselect(&mut self) {
-        self.state.select(None);
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
     }
 }
-
-impl<T> ListNavigate for TableItems<T> {}
 
 #[derive(Clone, Debug)]
 pub struct GitConfig {
@@ -207,14 +185,14 @@ impl App {
     }
     fn next(&mut self) {
         match self.selected_window {
-            0 => self.configs.next(),
+            0 => self.projects.next(),
             1 => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
         match self.selected_window {
-            0 => self.configs.previous(),
+            0 => self.projects.previous(),
             1 => self.configs.previous(),
             _ => self.configs.previous(),
         }
@@ -225,7 +203,7 @@ impl App {
             self.selected_window = 1
         } else {
             self.selected_window = 0
-            // write_tmp_to_project();
+            write_tmp_to_project();
         }
     }
     fn default_select(&mut self) {
