@@ -8,7 +8,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{fmt, io, time::SystemTime};
+use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -147,8 +147,7 @@ impl Project {
 impl TableItems<Project> {
     fn new() -> TableItems<Project> {
         TableItems {
-            // items: Vec::<Project>::new(),
-            items: read_project().unwrap(),
+            items: read_project().expect("AA"),
             state: TableState::default(),
         }
     }
@@ -202,7 +201,7 @@ impl App {
         if self.show_popup {
             self.selected_window = 1
         } else {
-            self.selected_window = 0
+            self.selected_window = 0;
             write_tmp_to_project();
         }
     }
@@ -371,8 +370,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .iter()
         .map(|p| {
             Row::new(vec![
-                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "").clone()),
-                Cell::from(p.path.clone()),
+                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
+                // Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
                 Cell::from(p.category.clone()),
                 Cell::from(p.status.to_string().clone()),
                 Cell::from(p.last_commit.clone()),
@@ -393,11 +392,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 }))
                 .border_type(BorderType::Plain),
         )
-        // .header(Row::new(vec!["Col1", "Col2"]))
+        .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
         .widths(&[
-            Constraint::Length(40),
-            Constraint::Length(50),
-            Constraint::Length(05),
+            Constraint::Length(30),
+            // Constraint::Length(40),
+            Constraint::Length(20),
             Constraint::Length(20),
             Constraint::Length(20),
         ])
@@ -447,7 +446,7 @@ fn render_config_paths<'a>(app: &App) -> Table<'a> {
                 .style(Style::default().fg(Color::Yellow).bg(Color::Black))
                 .border_type(BorderType::Plain),
         )
-        .widths(&[Constraint::Length(80), Constraint::Length(20)])
+        .widths(&[Constraint::Length(50), Constraint::Length(20)])
         .highlight_style(
             Style::default()
                 .bg(Color::Black)
