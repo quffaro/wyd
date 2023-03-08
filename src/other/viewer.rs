@@ -2,14 +2,13 @@
 // [] call github to see last push
 // [] search TODO in directory
 // [] press a to add project in current directory
-use crate::other::sql;
 use rand::prelude::*;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{fmt, io, time::SystemTime};
+use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -35,9 +34,41 @@ impl fmt::Display for Status {
     }
 }
 
-// pub trait ListNavigate {
-    
-// }
+pub trait ListNavigate {
+    fn get_items_len<'a>(&'a self) -> usize; 
+    fn get_state_selected<'a>(&'a self) -> Option<usize>;
+    fn select_state<'a>(&'a mut self, idx: Option<usize>);
+    //
+    fn next(&mut self) {
+        let i = match self.get_state_selected() {
+            Some(i) => {
+                if i >= self.get_items_len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.select_state(Some(i));
+    }
+    fn previous(&mut self) {
+        let i = match self.get_state_selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.get_items_len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.select_state(Some(i));
+    }
+    fn unselect(&mut self) {
+        self.select_state(None);
+    }
+}
 
 #[derive(Clone, Debug)]
 struct ListItems<T> {
@@ -45,37 +76,7 @@ struct ListItems<T> {
     state: ListState,
 }
 
-impl<T> ListItems<T> {
-    fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-    fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-    fn unselect(&mut self) {
-        self.state.select(None);
-    }
-}
+// impl<T> ListNavigate for ListItems<T> {}
 
 #[derive(Clone, Debug)]
 struct TableItems<T> {
@@ -83,35 +84,15 @@ struct TableItems<T> {
     state: TableState,
 }
 
-impl<T> TableItems<T> {
-    fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
+impl<T> ListNavigate for TableItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
     }
-    fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
     }
-    fn unselect(&mut self) {
-        self.state.select(None);
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
     }
 }
 
@@ -166,8 +147,7 @@ impl Project {
 impl TableItems<Project> {
     fn new() -> TableItems<Project> {
         TableItems {
-            // items: Vec::<Project>::new(),
-            items: read_project().unwrap(),
+            items: read_project().expect("AA"),
             state: TableState::default(),
         }
     }
@@ -204,14 +184,14 @@ impl App {
     }
     fn next(&mut self) {
         match self.selected_window {
-            0 => self.configs.next(),
+            0 => self.projects.next(),
             1 => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
         match self.selected_window {
-            0 => self.configs.previous(),
+            0 => self.projects.previous(),
             1 => self.configs.previous(),
             _ => self.configs.previous(),
         }
@@ -221,8 +201,8 @@ impl App {
         if self.show_popup {
             self.selected_window = 1
         } else {
-            self.selected_window = 0
-            // write_tmp_to_project();
+            self.selected_window = 0;
+            write_tmp_to_project();
         }
     }
     fn default_select(&mut self) {
@@ -280,9 +260,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         return Ok(());
                     }
                 }
+                // TODO add projects in current directory
                 KeyCode::Char('p') => app.popup(),
+                // TODO help box
+                KeyCode::Char('h') => app.popup(),
                 // KeyCode::Char('r') => app.reload(),
-
+                // TODO cycle focus
                 KeyCode::Tab => {
                     let mut rng = rand::thread_rng();
                     let y: f64 = rng.gen();
@@ -387,8 +370,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .iter()
         .map(|p| {
             Row::new(vec![
-                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "").clone()),
-                Cell::from(p.path.clone()),
+                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
+                // Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
                 Cell::from(p.category.clone()),
                 Cell::from(p.status.to_string().clone()),
                 Cell::from(p.last_commit.clone()),
@@ -409,11 +392,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 }))
                 .border_type(BorderType::Plain),
         )
-        // .header(Row::new(vec!["Col1", "Col2"]))
+        .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
         .widths(&[
-            Constraint::Length(40),
-            Constraint::Length(50),
-            Constraint::Length(05),
+            Constraint::Length(30),
+            // Constraint::Length(40),
+            Constraint::Length(20),
             Constraint::Length(20),
             Constraint::Length(20),
         ])
@@ -463,7 +446,7 @@ fn render_config_paths<'a>(app: &App) -> Table<'a> {
                 .style(Style::default().fg(Color::Yellow).bg(Color::Black))
                 .border_type(BorderType::Plain),
         )
-        .widths(&[Constraint::Length(80), Constraint::Length(20)])
+        .widths(&[Constraint::Length(50), Constraint::Length(20)])
         .highlight_style(
             Style::default()
                 .bg(Color::Black)
