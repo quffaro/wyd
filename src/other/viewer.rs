@@ -2,7 +2,6 @@
 // [] call github to see last push
 // [] search TODO in directory
 // [] press a to add project in current directory
-use crate::other::sql;
 use rand::prelude::*;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -35,21 +34,15 @@ impl fmt::Display for Status {
     }
 }
 
-// pub trait ListNavigate {
-    
-// }
-
-#[derive(Clone, Debug)]
-struct ListItems<T> {
-    items: Vec<T>,
-    state: ListState,
-}
-
-impl<T> ListItems<T> {
+pub trait ListNavigate {
+    fn get_items_len<'a>(&'a self) -> u8; 
+    fn get_state_selected<'a>(&'a self) -> u8;
+    fn select_state<'a>(&'a mut self, idx: u8);
+    //
     fn next(&mut self) {
-        let i = match self.state.selected() {
+        let i = match self.get_state_selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.get_items_len() - 1 {
                     0
                 } else {
                     i + 1
@@ -57,7 +50,7 @@ impl<T> ListItems<T> {
             }
             None => 0,
         };
-        self.state.select(Some(i));
+        self.select_state(i);
     }
     fn previous(&mut self) {
         let i = match self.state.selected() {
@@ -76,6 +69,14 @@ impl<T> ListItems<T> {
         self.state.select(None);
     }
 }
+
+#[derive(Clone, Debug)]
+struct ListItems<T> {
+    items: Vec<T>,
+    state: ListState,
+}
+
+// impl<T> ListNavigate for ListItems<T> {}
 
 #[derive(Clone, Debug)]
 struct TableItems<T> {
@@ -114,6 +115,8 @@ impl<T> TableItems<T> {
         self.state.select(None);
     }
 }
+
+impl<T> ListNavigate for TableItems<T> {}
 
 #[derive(Clone, Debug)]
 pub struct GitConfig {
@@ -280,9 +283,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         return Ok(());
                     }
                 }
+                // TODO add projects in current directory
                 KeyCode::Char('p') => app.popup(),
+                // TODO help box
+                KeyCode::Char('h') => app.popup(),
                 // KeyCode::Char('r') => app.reload(),
-
+                // TODO cycle focus
                 KeyCode::Tab => {
                     let mut rng = rand::thread_rng();
                     let y: f64 = rng.gen();
