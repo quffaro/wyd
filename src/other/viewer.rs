@@ -3,18 +3,20 @@
 // [] search TODO in directory
 // [] press a to add project in current directory
 use crate::other::sql;
+use rand::prelude::*;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::ops::Add;
-use std::{fmt, io};
+use std::{fmt, io, time::SystemTime};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
+    widgets::{
+        Block, BorderType, Borders, Cell, Clear, List, ListState, Paragraph, Row, Table, TableState,
+    },
     Frame, Terminal,
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
@@ -30,6 +32,48 @@ pub enum Status {
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+// pub trait ListNavigate {
+    
+// }
+
+#[derive(Clone, Debug)]
+struct ListItems<T> {
+    items: Vec<T>,
+    state: ListState,
+}
+
+impl<T> ListItems<T> {
+    fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+    fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+    fn unselect(&mut self) {
+        self.state.select(None);
     }
 }
 
@@ -91,7 +135,7 @@ impl TableItems<GitConfig> {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
                 // move project db commit to popup toggle
-                sql::update_tmp(&self.items[i]);
+                update_tmp(&self.items[i]);
             } else {
                 continue;
             }
@@ -225,6 +269,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     loop {
         terminal.draw(|rect| ui(rect, &mut app))?;
 
+        // TODO I want to Tab through interfaces
         if let Event::Key(key) = event::read().expect("Key error") {
             match key.code {
                 KeyCode::Char('q') => {
@@ -237,6 +282,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 }
                 KeyCode::Char('p') => app.popup(),
                 // KeyCode::Char('r') => app.reload(),
+
+                KeyCode::Tab => {
+                    let mut rng = rand::thread_rng();
+                    let y: f64 = rng.gen();
+                    app.message = format!("{:#?}", y)
+                }
                 KeyCode::Enter => app.toggle(),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
@@ -266,8 +317,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let greeting = format!("{}", app.message);
-    let title = Paragraph::new("hii")
+    let title = Paragraph::new(&*app.message)
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -290,8 +340,14 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     }
 
     // chunk 2: todo list
-    let msg = render_todo();
-    rect.render_widget(msg, chunks[2]);
+    let todo_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .split(chunks[2]);
+
+    let (left_todo_list, right_todo_search) = render_todo(&app);
+    rect.render_widget(left_todo_list, todo_chunks[0]);
+    rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // popup
     if app.show_popup {
@@ -445,27 +501,40 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn render_todo() -> (List<'a>, List<'a>) {
+fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
+    let todo_block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("(todo)")
+        .border_type(BorderType::Plain);
 
-    let list_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-            Constraint::Percentage(50),
-            Constraint::(Percentage(50)),
-            ].as_ref(),
-        )
-        .split(r);
+    let todo_items = vec![];
+    // .iter().map(|p| {ListItem::new(Spans::from(vec![Span::styled("A".to_owned())]))});
 
-    Layout::default
+    let left = List::new(todo_items).block(todo_block).highlight_style(
+        Style::default()
+            .bg(Color::Yellow)
+            .fg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    );
+  
 
-    Paragraph::new(greeting)
-        .style(Style::default().fg(Color::LightCyan))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .title("(pwd)")
-                .border_type(BorderType::Plain),
+    let search_todo_block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("(todo)")
+        .border_type(BorderType::Plain);
+
+    let search_todo_items = vec![];
+
+    let right = List::new(search_todo_items)
+        .block(search_todo_block)
+        .highlight_style(
+            Style::default()
+                .bg(Color::Yellow)
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
         );
+
+    (left, right)
 }

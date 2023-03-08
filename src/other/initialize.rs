@@ -1,13 +1,26 @@
 // look through ~ and find .git files. stop recursing that directory when a .git file is found and
 // return its path
 use glob::{glob};
-use rusqlite::{Connection, Result};
+// use rusqlite::{Result};
 use shellexpand;
 use std::path::PathBuf;
-use wyd::{CONFIG_SEARCH_PREFIX, CONFIG_PATH_SUFFIX, DATABASE};
+use wyd::{CONFIG_SEARCH_PREFIX, CONFIG_PATH_SUFFIX};
+use crate::other::sql::{initialize_db, write_tmp};
 
 // TODO need to find config files _not in projects._ We'll need our own table
-pub fn initialize() -> Result<()> {
+pub fn initialize() -> Result<(), rusqlite::Error> {
+
+    // CREATE DATABASE
+    initialize_db();
+
+    // FIND CONFIG FILES
+    let tmp = fetch_config_files();
+
+    // tmp
+    write_tmp(tmp)
+}
+
+fn fetch_config_files() -> Vec<String> {
     let expanded_path = shellexpand::tilde(CONFIG_SEARCH_PREFIX);
     let pattern: PathBuf = [&expanded_path, CONFIG_PATH_SUFFIX].iter().collect();
 
@@ -20,28 +33,11 @@ pub fn initialize() -> Result<()> {
                 .unwrap()
                 .replace(CONFIG_PATH_SUFFIX, "")
         })
-        // .map(|x| to_tgp(x))
         .collect();
 
-    // tmp
-    write_tmp(tmp)
+    tmp
 }
 
 // fn tmp_git_config
-fn write_tmp(tmp: Vec<String>) -> Result<()> {
-    let conn = Connection::open(DATABASE)?;
 
-    conn.execute(
-        "create table if not exists tmp_git_config (path varchar(255) not null primary key, is_selected tinyint(1) default 0);",
-        (),
-    )
-    .expect("Failed");
-
-    let mut stmt = conn.prepare("INSERT INTO tmp_git_config (path) VALUES (?)")?;
-    for x in tmp {
-        stmt.execute([x])?;
-    }
-
-    Ok(())
-}
 
