@@ -2,12 +2,12 @@
 // [] call github to see last push
 // [] search TODO in directory
 // [] press a to add project in current directory
-use rand::prelude::*;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use rand::prelude::*;
 use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -35,7 +35,7 @@ impl fmt::Display for Status {
 }
 
 pub trait ListNavigate {
-    fn get_items_len<'a>(&'a self) -> usize; 
+    fn get_items_len<'a>(&'a self) -> usize;
     fn get_state_selected<'a>(&'a self) -> Option<usize>;
     fn select_state<'a>(&'a mut self, idx: Option<usize>);
     //
@@ -163,12 +163,27 @@ impl TableItems<Project> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Todo {s
+    pub id: u8,
+    pub project_id: u8,
+    pub name: u8,
+    pub is_complete: u8,
+}
+
+impl ListItems<Todo> {
+    fn toggle(&mut self) {
+        for
+    }
+}
+
 struct App {
     show_popup: bool,
     selected_window: u8,
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
+    todoItems: ListItems<Todo>
 }
 
 impl App {
@@ -203,6 +218,7 @@ impl App {
         } else {
             self.selected_window = 0;
             write_tmp_to_project();
+            self.projects = TableItems::<Project>::new();
         }
     }
     fn default_select(&mut self) {
@@ -214,6 +230,15 @@ impl App {
             0 => self.projects.toggle(),
             1 => self.configs.toggle(),
             _ => self.configs.toggle(),
+        }
+    }
+    fn cycle_focus(&mut self) {
+        self.selected_window = match self.selected_window.clone() {
+            0 => 2,
+            1 => 1,
+            2 => 3,
+            3 => 0,
+            _ => 0
         }
     }
 }
@@ -266,11 +291,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 KeyCode::Char('h') => app.popup(),
                 // KeyCode::Char('r') => app.reload(),
                 // TODO cycle focus
-                KeyCode::Tab => {
-                    let mut rng = rand::thread_rng();
-                    let y: f64 = rng.gen();
-                    app.message = format!("{:#?}", y)
-                }
+                KeyCode::Tab => app.cycle_focus(),
                 KeyCode::Enter => app.toggle(),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
@@ -333,6 +354,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // popup
+    // TODO fuzzy find
     if app.show_popup {
         let block = render_config_paths(&app);
         // Block::default().title("Initialize").borders(Borders::ALL);
@@ -385,11 +407,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("Projects")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.selected_window == 0 {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }))
+                .style(Style::default().fg(
+                    if app.selected_window == 0 {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }
+                ))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -487,7 +511,13 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(
+            if app.selected_window == 2 {
+                Color::Yellow
+            } else {
+                Color::White
+            }
+        ))
         .title("(todo)")
         .border_type(BorderType::Plain);
 
@@ -500,11 +530,17 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
-  
 
     let search_todo_block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(
+            // TODO this can be a function
+            if app.selected_window == 3 {
+                Color::Yellow
+            } else {
+                Color::White
+            }
+        ))
         .title("(todo)")
         .border_type(BorderType::Plain);
 
