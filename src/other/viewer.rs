@@ -3,11 +3,10 @@
 // [] search TODO in directory
 // [] press a to add project in current directory
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::prelude::*;
 use std::{fmt, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -20,7 +19,7 @@ use tui::{
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
 
-use super::sql::{read_project, read_tmp, update_tmp, write_tmp_to_project};
+use super::sql::{read_project, read_tmp, update_tmp, write_tmp_to_project, read_todo};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
@@ -76,7 +75,17 @@ struct ListItems<T> {
     state: ListState,
 }
 
-// impl<T> ListNavigate for ListItems<T> {}
+impl<T> ListNavigate for ListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
 
 #[derive(Clone, Debug)]
 struct TableItems<T> {
@@ -163,17 +172,38 @@ impl TableItems<Project> {
     }
 }
 
+// TODO i would like to nest these guys
 #[derive(Clone, Debug)]
-pub struct Todo {s
+pub struct Todo {
     pub id: u8,
+    pub parent_id: u8,
     pub project_id: u8,
-    pub name: u8,
-    pub is_complete: u8,
+    pub todo: String,
+    pub is_complete: bool,
 }
 
+
 impl ListItems<Todo> {
+    fn new() -> ListItems<Todo> {
+        ListItems {
+            items: read_todo().expect("AA"),
+            // match project_id {
+            //     Some(i) => read_todo(i).expect("AA"),
+            //     None    => read_todo(0).expect("AA")
+            // },
+            state: ListState::default(),
+        }
+    }
+    // TODO can this be a method for ListNavigate?
     fn toggle(&mut self) {
-        for
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].is_complete = !self.items[i].is_complete;
+            } else {
+                continue;
+            }
+        }
     }
 }
 
@@ -183,40 +213,45 @@ struct App {
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
-    todoItems: ListItems<Todo>
+    todos: ListItems<Todo>
 }
 
+// TODO does App need ListNavigate trait?
 impl App {
     fn new() -> App {
         App {
             show_popup: false,
-            selected_window: 0,
-            // message: "hiii".to_owned(),
-            message: Vec::<Project>::new().len().to_string(),
+            selected_window: 1,
+            message: "hiii".to_owned(),
+            // message: Vec::<Project>::new().len().to_string(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
+            todos: ListItems::<Todo>::new(),
         }
     }
     fn next(&mut self) {
         match self.selected_window {
-            0 => self.projects.next(),
-            1 => self.configs.next(),
+            1 => {
+                self.projects.next();
+                self.todos = ListItems::<Todo>::new();
+            }
+            0 => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
         match self.selected_window {
-            0 => self.projects.previous(),
-            1 => self.configs.previous(),
+            1 => self.projects.previous(),
+            0 => self.configs.previous(),
             _ => self.configs.previous(),
         }
     }
     fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.selected_window = 1
+            self.selected_window = 0
         } else {
-            self.selected_window = 0;
+            self.selected_window = 1;
             write_tmp_to_project();
             self.projects = TableItems::<Project>::new();
         }
@@ -227,19 +262,39 @@ impl App {
     }
     fn toggle(&mut self) {
         match self.selected_window {
-            0 => self.projects.toggle(),
-            1 => self.configs.toggle(),
+            0 => self.configs.toggle(),
+            1 => self.projects.toggle(),
             _ => self.configs.toggle(),
         }
     }
-    fn cycle_focus(&mut self) {
+    fn cycle_focus_next(&mut self) {
         self.selected_window = match self.selected_window.clone() {
-            0 => 2,
-            1 => 1,
+            0 => 0,
+            1 => 2,
             2 => 3,
-            3 => 0,
-            _ => 0
+            3 => 1,
+            _ => 1
         }
+    }
+    fn cycle_focus_previous(&mut self) {
+        self.selected_window = match self.selected_window.clone() {
+            0 => 0,
+            1 => 3,
+            2 => 1,
+            3 => 2,
+            _ => 1
+        }
+    }
+    fn quit(&mut self) {
+
+    }
+    fn filter_todo(&mut self) -> Vec<Todo> {
+        let project_id = self.projects.get_state_selected().unwrap() as u8;
+        self.todos.items
+            .clone()
+            .into_iter()
+            .filter(|t| t.project_id == project_id)
+            .collect()
     }
 }
 
@@ -275,27 +330,50 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         terminal.draw(|rect| ui(rect, &mut app))?;
 
         // TODO I want to Tab through interfaces
+        // if let Event::Key(key) = event::read().expect("Key error") {
+            // match key.code {
+            //     KeyCode::Char('q') => {
+            //         if app.selected_window == 0 {
+            //             app.show_popup = false;
+            //             app.selected_window = 1;
+            //         } else {
+            //             return Ok(());
+            //         }
+            //     }
+            //     // TODO add projects in current directory
+            //     KeyCode::Char('p') => app.popup(),
+            //     // TODO help box
+            //     KeyCode::Char('h') => app.popup(),
+            //     // KeyCode::Char('r') => app.reload(),
+            //     KeyCode::Tab => app.cycle_focus_next(),
+            //     // KeyCode::Tab => app.cycle_focus_previous(),
+            //     KeyCode::Enter => app.toggle(),
+            //     KeyCode::Down => app.next(),
+            //     KeyCode::Up => app.previous(),
+            //     _ => {}
+            // }
+            
+        // }
+
         if let Event::Key(key) = event::read().expect("Key error") {
-            match key.code {
-                KeyCode::Char('q') => {
-                    if app.selected_window == 1 {
+            match key {
+                KeyEvent { code: KeyCode::Char('q'), modifiers: KeyModifiers::NONE } => {
+                    if app.selected_window == 0 {
                         app.show_popup = false;
-                        app.selected_window = 0;
+                        app.selected_window = 1;
                     } else {
                         return Ok(());
                     }
                 }
-                // TODO add projects in current directory
-                KeyCode::Char('p') => app.popup(),
-                // TODO help box
-                KeyCode::Char('h') => app.popup(),
-                // KeyCode::Char('r') => app.reload(),
-                // TODO cycle focus
-                KeyCode::Tab => app.cycle_focus(),
-                KeyCode::Enter => app.toggle(),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
-                _ => {}
+                KeyEvent { code: KeyCode::Char('p'), modifiers: KeyModifiers::NONE} => app.popup(),
+                KeyEvent { code: KeyCode::Char('h'), modifiers: KeyModifiers::NONE} => app.popup(),
+                // TODO cycle previous does not work
+                KeyEvent { code: KeyCode::Char('j'), modifiers: KeyModifiers::NONE} => app.cycle_focus_previous(),
+                KeyEvent { code: KeyCode::Char(';'), modifiers: KeyModifiers::NONE} => app.cycle_focus_next(),
+                KeyEvent { code: KeyCode::Char('l'), modifiers: KeyModifiers::NONE} => app.next(),
+                KeyEvent { code: KeyCode::Char('k'), modifiers: KeyModifiers::NONE} => app.previous(),
+                KeyEvent { code: KeyCode::Enter,     modifiers: KeyModifiers::NONE} => app.toggle(),
+                _                                                                   => (),
             }
         }
     }
@@ -408,7 +486,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 .title("Projects")
                 .borders(Borders::ALL)
                 .style(Style::default().fg(
-                    if app.selected_window == 0 {
+                    if app.selected_window == 1 {
                         Color::Yellow
                     } else {
                         Color::White
@@ -426,7 +504,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.selected_window == 0 {
+                .bg(if app.selected_window == 1 {
                     Color::Yellow
                 } else {
                     Color::Gray
@@ -512,6 +590,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(
+            // TODO this should be a rule
             if app.selected_window == 2 {
                 Color::Yellow
             } else {
@@ -521,8 +600,10 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    let todo_items = vec![];
-    // .iter().map(|p| {ListItem::new(Spans::from(vec![Span::styled("A".to_owned())]))});
+    // filter 
+    let todo_items: Vec<String> = *&app.filter_todo().iter().map(|x| x.todo).collect();
+    // vec![];
+    // *&app.filter_todo().to_owned();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()

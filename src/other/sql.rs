@@ -3,20 +3,22 @@ use regex::{Captures, Regex};
 use rusqlite::Connection;
 use wyd::{self, DATABASE};
 
+use super::viewer::Todo;
+
 /// CREATE TABLES
 const CREATE_CONFIG: &str  
 = "CREATE TABLE IF NOT EXISTS tmp_git_config (path varchar(255) not null primary key, is_selected tinyint(1) default 0, UNIQUE(path));";
 const CREATE_PROJECT: &str 
-= "CREATE TABLE IF NOT EXISTS project (id integer primary key autoincrement, path varchar(255), name varchar(255), cat varchar(255), status varchar(255), last_commit varchar(255),);";
+= "CREATE TABLE IF NOT EXISTS project (id integer primary key autoincrement, path varchar(255), name varchar(255), cat varchar(255), status varchar(255), last_commit varchar(255));";
 const CREATE_TODO: &str    
-= "CREATE TABLE IF NOT EXISTS todo (id integer primary key autoincrement, project_id int, todo varchar(255);";
+= "CREATE TABLE IF NOT EXISTS todo (id integer primary key autoincrement, parent_id integer, project_id integer, todo varchar(255), is_complete tinyint(1) default 0);";
 pub fn initialize_db() -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
     // TODO I want to collect these errors
     conn.execute(CREATE_CONFIG, ())?;
     conn.execute(CREATE_PROJECT, ())?;
-    conn.execute(CREATE_TODO, ())?;
+    conn.execute(CREATE_TODO, ()).expect("BBB!!");
 
     Ok(())
 }
@@ -64,6 +66,49 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
         .collect();
 
     res
+}
+
+/// TODOs
+const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
+pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {
+    let conn = Connection::open(wyd::DATABASE)?;
+
+    let mut stmt = conn.prepare(READ_TODO)?;
+    let res = stmt
+        .query_map([], |row| {
+            Ok(Todo {
+                id: row.get(0)?,
+                parent_id: row.get(1)?,
+                project_id: row.get(2)?, 
+                todo: row.get(3)?,
+                is_complete: row.get(4)?
+            })
+        })
+        .expect("A!!")
+        .collect();
+
+    res
+}
+
+const WRITE_TODO: &str = "insert or replace into todo (id,parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4, ?5);";
+pub fn write_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+    
+    let mut write_stmt = conn.prepare(WRITE_TODO)?;
+    for x in todos {
+        write_stmt.execute([
+            x.id,
+            x.parent_id,
+            x.project_id,
+            x.todo,
+            match x.is_complete {
+                true => 1,
+                _ => 0,
+            },
+        ]).expect("AAA!");
+    };
+
+    Ok(())
 }
 
 ///
