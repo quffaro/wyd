@@ -2,9 +2,10 @@
 // [] call github to see last push
 // [] search TODO in directory
 // [] press a to add project in current directory
-use rand::prelude::*;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -14,13 +15,14 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{
-        Block, BorderType, Borders, Cell, Clear, List, ListState, Paragraph, Row, Table, TableState,
+        Block, BorderType, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table,
+        TableState,
     },
     Frame, Terminal,
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
 
-use super::sql::{read_project, read_tmp, update_tmp, write_tmp_to_project};
+use super::sql::{read_project, read_tmp, read_todo, update_tmp, write_tmp_to_project};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
@@ -35,7 +37,7 @@ impl fmt::Display for Status {
 }
 
 pub trait ListNavigate {
-    fn get_items_len<'a>(&'a self) -> usize; 
+    fn get_items_len<'a>(&'a self) -> usize;
     fn get_state_selected<'a>(&'a self) -> Option<usize>;
     fn select_state<'a>(&'a mut self, idx: Option<usize>);
     //
@@ -76,7 +78,17 @@ struct ListItems<T> {
     state: ListState,
 }
 
-// impl<T> ListNavigate for ListItems<T> {}
+impl<T> ListNavigate for ListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
 
 #[derive(Clone, Debug)]
 struct TableItems<T> {
@@ -163,46 +175,110 @@ impl TableItems<Project> {
     }
 }
 
+// TODO i would like to nest these guys
+#[derive(Clone, Debug)]
+pub struct Todo {
+    pub id: u8,
+    pub parent_id: u8,
+    pub project_id: u8,
+    pub todo: String,
+    pub is_complete: bool,
+}
+
+impl ListItems<Todo> {
+    fn new() -> ListItems<Todo> {
+        ListItems {
+            items: read_todo().expect("AA"),
+            // match project_id {
+            //     Some(i) => read_todo(i).expect("AA"),
+            //     None    => read_todo(0).expect("AA")
+            // },
+            state: ListState::default(),
+        }
+    }
+    // TODO can this be a method for ListNavigate?
+    fn toggle(&mut self) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].is_complete = !self.items[i].is_complete;
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
 struct App {
     show_popup: bool,
-    selected_window: u8,
+    focused_window: String,
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
+    todos: ListItems<Todo>,
 }
 
+const WINDOW_CONFIGS: &str = "configs";
+const WINDOW_PROJECTS: &str = "projects";
+const WINDOW_TODO: &str = "todo";
+const WINDOW_TODO_SEARCH: &str = "todo-search";
+const WINDOW_ADD_TODO: &str = "add-todo";
+
+// TODO does App need ListNavigate trait?
 impl App {
     fn new() -> App {
         App {
             show_popup: false,
-            selected_window: 0,
-            // message: "hiii".to_owned(),
-            message: Vec::<Project>::new().len().to_string(),
+            focused_window: "projects".to_owned(),
+            message: "hiii".to_owned(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
+            todos: ListItems::<Todo>::new(),
         }
     }
     fn next(&mut self) {
-        match self.selected_window {
-            0 => self.projects.next(),
-            1 => self.configs.next(),
+        // match self.selected_window {
+        //     1 => {
+        //         self.projects.next();
+        //         self.todos = ListItems::<Todo>::new();
+        //     }
+        //     0 => self.configs.next(),
+        //     _ => self.configs.next(),
+        // }
+        match self.focused_window.as_str() {
+            WINDOW_PROJECTS => self.projects.next(),
+            WINDOW_TODO => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
-        match self.selected_window {
-            0 => self.projects.previous(),
-            1 => self.configs.previous(),
+        match self.focused_window.as_str() {
+            WINDOW_PROJECTS => self.projects.previous(),
+            WINDOW_TODO => self.configs.previous(),
             _ => self.configs.previous(),
         }
+        // match self.selected_window {
+        //     1 => self.projects.previous(),
+        //     0 => self.configs.previous(),
+        //     _ => self.configs.previous(),
+        // }
     }
     fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.selected_window = 1
+            self.focused_window = WINDOW_CONFIGS.to_owned();
         } else {
-            self.selected_window = 0;
+            self.focused_window = WINDOW_PROJECTS.to_owned();
             write_tmp_to_project();
+            self.projects = TableItems::<Project>::new();
+        }
+    }
+    fn popup_add_task(&mut self) {
+        self.show_popup = !self.show_popup;
+        if self.show_popup {
+            self.focused_window = WINDOW_ADD_TODO.to_owned()
+        } else {
+            self.focused_window = WINDOW_TODO.to_owned();
         }
     }
     fn default_select(&mut self) {
@@ -210,12 +286,40 @@ impl App {
         self.configs.state.select(Some(0));
     }
     fn toggle(&mut self) {
-        match self.selected_window {
-            0 => self.projects.toggle(),
-            1 => self.configs.toggle(),
+        match self.focused_window.as_str() {
+            WINDOW_CONFIGS => self.configs.toggle(),
+            WINDOW_TODO => self.projects.toggle(),
             _ => self.configs.toggle(),
         }
     }
+    fn cycle_focus_next(&mut self) {
+        self.focused_window = match self.focused_window.clone().as_str() {
+            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
+            WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
+            WINDOW_TODO => WINDOW_TODO_SEARCH.to_owned(),
+            WINDOW_TODO_SEARCH => WINDOW_PROJECTS.to_owned(),
+            _ => WINDOW_PROJECTS.to_owned(),
+        }
+    }
+    fn cycle_focus_previous(&mut self) {
+        self.focused_window = match self.focused_window.clone().as_str() {
+            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
+            WINDOW_PROJECTS => WINDOW_TODO_SEARCH.to_owned(),
+            WINDOW_TODO_SEARCH => WINDOW_TODO.to_owned(),
+            WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
+            _ => WINDOW_PROJECTS.to_owned(),
+        }
+    }
+    fn filter_todo(&mut self) -> Vec<Todo> {
+        let project_id = self.projects.get_state_selected().unwrap() as u8;
+        self.todos
+            .items
+            .clone()
+            .into_iter()
+            .filter(|t| t.project_id == project_id)
+            .collect()
+    }
+    fn quit(&mut self) {}
 }
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
@@ -253,9 +357,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         if let Event::Key(key) = event::read().expect("Key error") {
             match key.code {
                 KeyCode::Char('q') => {
-                    if app.selected_window == 1 {
+                    if app.focused_window == WINDOW_CONFIGS {
                         app.show_popup = false;
-                        app.selected_window = 0;
+                        app.focused_window = WINDOW_PROJECTS.to_owned();
                     } else {
                         return Ok(());
                     }
@@ -265,15 +369,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 // TODO help box
                 KeyCode::Char('h') => app.popup(),
                 // KeyCode::Char('r') => app.reload(),
-                // TODO cycle focus
-                KeyCode::Tab => {
-                    let mut rng = rand::thread_rng();
-                    let y: f64 = rng.gen();
-                    app.message = format!("{:#?}", y)
-                }
+                KeyCode::Char('a') => {}
+                // navigate
+                KeyCode::Char(';') => app.cycle_focus_next(),
+                KeyCode::Char('j') => app.cycle_focus_previous(),
+                KeyCode::Char('l') => app.next(),
+                KeyCode::Char('k') => app.previous(),
                 KeyCode::Enter => app.toggle(),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
                 _ => {}
             }
         }
@@ -323,6 +425,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     }
 
     // chunk 2: todo list
+    // TODO do we need to specify percentages if they are uniform?
     let todo_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
@@ -333,12 +436,13 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // popup
+    // TODO fuzzy find
     if app.show_popup {
-        let block = render_config_paths(&app);
+        let block_config = render_config_paths(&app);
         // Block::default().title("Initialize").borders(Borders::ALL);
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
-        rect.render_stateful_widget(block, area, &mut app.configs.state);
+        rect.render_stateful_widget(block_config, area, &mut app.configs.state);
     };
 }
 
@@ -385,11 +489,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("Projects")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.selected_window == 0 {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }))
+                .style(
+                    Style::default().fg(if app.focused_window == WINDOW_PROJECTS {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }),
+                )
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -402,7 +508,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.selected_window == 0 {
+                .bg(if app.focused_window == WINDOW_PROJECTS {
                     Color::Yellow
                 } else {
                     Color::Gray
@@ -414,6 +520,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
 
     projects
 }
+
+// add task
 
 // render paths
 fn render_config_paths<'a>(app: &App) -> Table<'a> {
@@ -487,12 +595,24 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(
+            // TODO this should be a rule
+            if app.focused_window == WINDOW_TODO {
+                Color::Yellow
+            } else {
+                Color::White
+            },
+        ))
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    let todo_items = vec![];
-    // .iter().map(|p| {ListItem::new(Spans::from(vec![Span::styled("A".to_owned())]))});
+    // filter
+    let todo_items: Vec<ListItem> = app
+        .todos
+        .items
+        .iter()
+        .map(|x| ListItem::new(x.todo.clone()))
+        .collect();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
@@ -500,11 +620,17 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
-  
 
     let search_todo_block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(
+            // TODO this can be a function
+            if app.focused_window == WINDOW_TODO_SEARCH {
+                Color::Yellow
+            } else {
+                Color::White
+            },
+        ))
         .title("(todo)")
         .border_type(BorderType::Plain);
 

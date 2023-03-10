@@ -11,7 +11,7 @@ use crate::other::sql::{initialize_db, write_tmp};
 pub fn initialize() -> Result<(), rusqlite::Error> {
 
     // CREATE DATABASE
-    initialize_db();
+    initialize_db()?;
 
     // FIND CONFIG FILES
     let tmp = fetch_config_files();

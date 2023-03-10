@@ -1,4 +1,4 @@
-#![feature(result_cloned)]
+// #![feature(result_cloned)]
 
 mod other;
 fn main() {
