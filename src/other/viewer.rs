@@ -4,244 +4,28 @@
 // [] press a to add project in current directory
 use crossterm::{
     event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode,
     },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{fmt, io};
+use std::{io};
 use tui_textarea::{Input, Key, TextArea};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{
-        Block, BorderType, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table,
-        TableState
+        Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table,
     },
-    Frame, Terminal, text,
+    Frame, Terminal
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
+use wyd::{WINDOW_PROJECTS, WINDOW_TODO, WINDOW_DESCRIPTION, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_ADD_TODO};
 
-use super::sql::{read_project, read_tmp, read_todo, update_tmp, write_new_todo, write_tmp_to_project, update_todo};
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Status {
-    Stable,
-    Unstable,
-}
-
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-pub trait ListNavigate {
-    fn get_items_len<'a>(&'a self) -> usize;
-    fn get_state_selected<'a>(&'a self) -> Option<usize>;
-    fn select_state<'a>(&'a mut self, idx: Option<usize>);
-    //
-    fn next(&mut self) {
-        let i = match self.get_state_selected() {
-            Some(i) => {
-                if i >= self.get_items_len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.select_state(Some(i));
-    }
-    fn previous(&mut self) {
-        let i = match self.get_state_selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.get_items_len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.select_state(Some(i));
-    }
-    fn unselect(&mut self) {
-        self.select_state(None);
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ListItems<T> {
-    items: Vec<T>,
-    state: ListState,
-}
-
-
-impl<T> ListNavigate for ListItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct FilteredListItems<T> {
-    items: Vec<T>,
-    filtered: Vec<T>,
-    state: ListState,
-}
-
-impl<T> ListNavigate for FilteredListItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct TableItems<T> {
-    items: Vec<T>,
-    state: TableState,
-}
-
-
-impl<T> ListNavigate for TableItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GitConfig {
-    pub path: String,
-    pub is_selected: bool,
-}
-
-impl TableItems<GitConfig> {
-    fn new() -> TableItems<GitConfig> {
-        TableItems {
-            // items: Vec::<GitConfig>::new(),
-            items: read_tmp().unwrap(),
-            state: TableState::default(),
-        }
-    }
-    fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.items.len() {
-            if i == selected {
-                self.items[i].is_selected = !self.items[i].is_selected;
-                // move project db commit to popup toggle
-                update_tmp(&self.items[i]);
-            } else {
-                continue;
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Project {
-    pub id: u8,
-    pub path: String,
-    pub name: String,
-    pub category: String,
-    pub status: Status,
-    pub last_commit: String,
-}
-
-impl Project {
-    fn cycle_status(&mut self) {
-        self.status = match self.status {
-            Status::Stable => Status::Unstable,
-            Status::Unstable => Status::Stable,
-            _ => Status::Unstable,
-        }
-        // TODO we need to write this
-    }
-}
-
-impl TableItems<Project> {
-    fn new() -> TableItems<Project> {
-        TableItems {
-            items: read_project().expect("AA"),
-            state: TableState::default(),
-        }
-    }
-    fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.items.len() {
-            if i == selected {
-                self.items[i].cycle_status();
-            } else {
-                continue;
-            }
-        }
-    }
-}
-
-// TODO i would like to nest these guys
-#[derive(Clone, Debug)]
-pub struct Todo {
-    pub id: u8,
-    pub parent_id: u8,
-    pub project_id: u8,
-    pub todo: String,
-    pub is_complete: bool,
-}
-
-impl FilteredListItems<Todo> {
-    fn new() -> FilteredListItems<Todo> {
-        FilteredListItems {
-            items: read_todo().expect("AA"),
-            filtered: vec![],
-            state: ListState::default(),
-        }
-    }
-    // TODO can this be a method for ListNavigate?
-    fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.filtered.len() {
-            if i == selected {
-                self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                update_todo(&self.filtered[i]).expect("msg");
-            } else {
-                continue;
-            }
-        }
-    }
-    fn select_filter_state(&mut self, idx: Option<usize>, project_id: u8) {
-        self.state.select(idx);
-        self.filter_from_projects(project_id);
-    }
-    fn filter_from_projects(&mut self, project_id: u8) {
-        // let idx = self.projects.get_state_selected().unwrap();
-        // let project = &self.projects.items[idx];
-        let items = self.items.clone();
-        self.filtered = items
-            .into_iter()
-            .filter(|t| t.project_id == project_id)
-            .collect(); 
-    }
-}
+use super::{
+    sql::{write_new_todo, write_tmp_to_project,}, 
+    structs::{Todo, GitConfig, Project, FilteredListItems, TableItems, ListNavigate}};
 
 struct App {
     show_popup: bool,
@@ -251,12 +35,6 @@ struct App {
     projects: TableItems<Project>,
     todos: FilteredListItems<Todo>,
 }
-
-const WINDOW_PROJECTS: &str = "projects";
-const WINDOW_TODO: &str = "todo";
-const WINDOW_DESCRIPTION: &str = "description";
-const WINDOW_POPUP_CONFIGS: &str = "configs";
-const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
 
 // TODO does App need ListNavigate trait?
 impl App {
@@ -337,7 +115,13 @@ impl App {
                 is_complete: false
             }]
         );
-        self.todos = FilteredListItems::<Todo>::new();
+        // TODO I want to simplify this...
+        self.todos = FilteredListItems::<Todo>::new(); 
+        self.todos.select_filter_state(Some(0), project.id);
+        self.todo_sort();
+    }
+    fn todo_sort(&mut self) {
+        self.todos.sort_by_complete()
     }
     fn default_select(&mut self) {
         self.projects.state.select(Some(0));
@@ -421,10 +205,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             {
                 ui(rect, &mut app);
                 // TODO make this a function which accepts textarea, rect, app
+                // TODO todos want date column
                 if app.show_popup && app.focused_window == WINDOW_POPUP_ADD_TODO.to_owned() {
                     let size = rect.size();
                     let area = centered_rect(40, 40, size);
-                    rect.render_widget(Clear, area); //this clears out the background
+                    rect.render_widget(Clear, area); //s
                     
                     let idx = app.projects.get_state_selected().unwrap();
                     let project = &app.projects.items[idx];
@@ -440,10 +225,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         )?;
 
         match app.focused_window.as_str() {
+            // TODO write without committing...
             WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
-                Input { key: Key::Esc,   ..} => app.popup_task_write_and_close(
-                    textarea.lines().join("\n").to_owned(),
-                ),
+                Input { key: Key::Esc,   ..} => {
+                    app.popup_task_write_and_close(
+                        textarea.lines().join("\n").to_owned()
+                    );
+                    textarea = TextArea::default();
+                }
                 Input { key: Key::Enter, ..} => {},
                 input => {textarea.input(input);}
             },
@@ -463,11 +252,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     KeyCode::Char('h') => {},
                     // KeyCode::Char('r') => app.reload(),
                     KeyCode::Char('a') => app.popup_add_task(),
-                    // TODO allow arrow keys as well
-                    KeyCode::Char(';') => app.cycle_focus_next(),
-                    KeyCode::Char('j') => app.cycle_focus_previous(),
-                    KeyCode::Char('l') => app.next(),
-                    KeyCode::Char('k') => app.previous(),
+                    KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
+                    KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                    KeyCode::Char('l') | KeyCode::Down => app.next(),
+                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
                     KeyCode::Enter => app.toggle(),
                     _ => {}
                 }
@@ -511,7 +299,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
 
     // chunk 1: projects
     if app.projects.items.len() == 0 {
-        let no_projects = render_no_projects(&app);
+        let no_projects = render_no_projects();
         rect.render_widget(no_projects, chunks[1]);
     } else {
         let projects = render_projects(&app);
@@ -525,13 +313,11 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(chunks[2]);
 
-    // filter
     let (left_todo_list, right_todo_search) = render_todo(&app);
     rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
     rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // popup
-    
     // which popup is decided here
     if app.show_popup && app.focused_window == WINDOW_POPUP_CONFIGS.to_owned() {
         // TODO fuzzy find
@@ -546,7 +332,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
 
 
 // TODO remove app reference. not needed
-fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
+fn render_no_projects<'a>() -> Paragraph<'a> {
     let msg = "Press `p` to add projects".to_owned();
     let no_projects = Paragraph::new(msg)
         .style(
@@ -600,10 +386,10 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
         .widths(&[
-            Constraint::Length(30),
+            Constraint::Length(50),
             // Constraint::Length(40),
-            Constraint::Length(20),
-            Constraint::Length(20),
+            Constraint::Length(10),
+            Constraint::Length(10),
             Constraint::Length(20),
         ])
         .highlight_style(
