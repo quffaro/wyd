@@ -1,6 +1,6 @@
 use crate::other::viewer::{GitConfig, Project, Status};
 use regex::{Captures, Regex};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use wyd::{self, DATABASE};
 
 use super::viewer::Todo;
@@ -96,11 +96,12 @@ pub fn write_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
     
     let mut write_stmt = conn.prepare(WRITE_TODO)?;
     for x in todos {
-        write_stmt.execute([
+        write_stmt.execute(
+            params![
             x.id,
             x.parent_id,
             x.project_id,
-            x.todo,
+            x.todo.as_str(),
             match x.is_complete {
                 true => 1,
                 _ => 0,
