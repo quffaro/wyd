@@ -90,15 +90,34 @@ pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {
     res
 }
 
-const WRITE_TODO: &str = "insert or replace into todo (id,parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4, ?5);";
-pub fn write_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
+const UPDATE_TODO: &str = "insert or replace into todo (id,parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4, ?5);";
+pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
     
-    let mut write_stmt = conn.prepare(WRITE_TODO)?;
+    let mut write_stmt = conn.prepare(UPDATE_TODO)?;
+    write_stmt.execute(
+        params![
+        todo.id,
+        todo.parent_id,
+        todo.project_id,
+        todo.todo.as_str(),
+        match todo.is_complete {
+            true => 1,
+            _ => 0,
+        },
+    ]).expect("AAA!");
+
+    Ok(())
+}
+
+const WRITE_NEW_TODO: &str = "insert or replace into todo (parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4);";
+pub fn write_new_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+    
+    let mut write_stmt = conn.prepare(WRITE_NEW_TODO)?;
     for x in todos {
         write_stmt.execute(
             params![
-            x.id,
             x.parent_id,
             x.project_id,
             x.todo.as_str(),

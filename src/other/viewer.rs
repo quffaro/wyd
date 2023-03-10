@@ -10,19 +10,20 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{fmt, io};
+use tui_textarea::{Input, Key, TextArea};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{
         Block, BorderType, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table,
-        TableState,
+        TableState
     },
-    Frame, Terminal,
+    Frame, Terminal, text,
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
 
-use super::sql::{read_project, read_tmp, read_todo, update_tmp, write_tmp_to_project};
+use super::sql::{read_project, read_tmp, read_todo, update_tmp, write_new_todo, write_tmp_to_project, update_todo};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
@@ -78,7 +79,9 @@ struct ListItems<T> {
     state: ListState,
 }
 
-impl<T> ListNavigate for ListItems<T> {
+
+impl<T> ListNavigate for ListItems<T> 
+{
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }
@@ -95,6 +98,7 @@ struct TableItems<T> {
     items: Vec<T>,
     state: TableState,
 }
+
 
 impl<T> ListNavigate for TableItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
@@ -153,6 +157,7 @@ impl Project {
             Status::Unstable => Status::Stable,
             _ => Status::Unstable,
         }
+        // TODO we need to write this
     }
 }
 
@@ -202,6 +207,7 @@ impl ListItems<Todo> {
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_complete = !self.items[i].is_complete;
+                update_todo(&self.items[i]).expect("msg");
             } else {
                 continue;
             }
@@ -218,11 +224,11 @@ struct App {
     todos: ListItems<Todo>,
 }
 
-const WINDOW_CONFIGS: &str = "configs";
 const WINDOW_PROJECTS: &str = "projects";
 const WINDOW_TODO: &str = "todo";
-const WINDOW_TODO_SEARCH: &str = "todo-search";
-const WINDOW_ADD_TODO: &str = "add-todo";
+const WINDOW_DESCRIPTION: &str = "description";
+const WINDOW_POPUP_CONFIGS: &str = "configs";
+const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
 
 // TODO does App need ListNavigate trait?
 impl App {
@@ -237,75 +243,79 @@ impl App {
         }
     }
     fn next(&mut self) {
-        // match self.selected_window {
-        //     1 => {
-        //         self.projects.next();
-        //         self.todos = ListItems::<Todo>::new();
-        //     }
-        //     0 => self.configs.next(),
-        //     _ => self.configs.next(),
-        // }
         match self.focused_window.as_str() {
-            WINDOW_PROJECTS => self.projects.next(),
-            WINDOW_TODO => self.configs.next(),
+            WINDOW_PROJECTS => {self.projects.next(); self.todos.select_state(Some(0));},
+            WINDOW_TODO => self.todos.next(),
+            WINDOW_POPUP_CONFIGS => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
         match self.focused_window.as_str() {
-            WINDOW_PROJECTS => self.projects.previous(),
-            WINDOW_TODO => self.configs.previous(),
+            WINDOW_PROJECTS => {self.projects.previous(); self.todos.select_state(Some(0));},
+            WINDOW_TODO => self.todos.previous(),
+            WINDOW_POPUP_CONFIGS => self.configs.previous(),
             _ => self.configs.previous(),
         }
-        // match self.selected_window {
-        //     1 => self.projects.previous(),
-        //     0 => self.configs.previous(),
-        //     _ => self.configs.previous(),
-        // }
     }
     fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_CONFIGS.to_owned();
+            self.focused_window = WINDOW_POPUP_CONFIGS.to_owned();
         } else {
             self.focused_window = WINDOW_PROJECTS.to_owned();
             write_tmp_to_project();
             self.projects = TableItems::<Project>::new();
         }
     }
+    // TODO we need to track the previous
     fn popup_add_task(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_ADD_TODO.to_owned()
-        } else {
-            self.focused_window = WINDOW_TODO.to_owned();
-        }
+            self.focused_window = WINDOW_POPUP_ADD_TODO.to_owned()
+        } 
+    }
+    fn popup_task_write_and_close(&mut self, todo: String) {
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items[idx];
+        self.focused_window = WINDOW_TODO.to_owned();
+            write_new_todo(vec![Todo {
+                id: 0,
+                parent_id: 0,
+                project_id: project.id,
+                todo: todo,
+                is_complete: false
+            }]
+        );
+        self.todos = ListItems::<Todo>::new();
     }
     fn default_select(&mut self) {
         self.projects.state.select(Some(0));
         self.configs.state.select(Some(0));
+        self.todos.state.select(Some(0));
     }
     fn toggle(&mut self) {
         match self.focused_window.as_str() {
-            WINDOW_CONFIGS => self.configs.toggle(),
-            WINDOW_TODO => self.projects.toggle(),
+            WINDOW_POPUP_CONFIGS => self.configs.toggle(),
+            WINDOW_PROJECTS => self.projects.toggle(),
+            WINDOW_TODO => self.todos.toggle(),
             _ => self.configs.toggle(),
         }
     }
     fn cycle_focus_next(&mut self) {
         self.focused_window = match self.focused_window.clone().as_str() {
-            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
+            WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
-            WINDOW_TODO => WINDOW_TODO_SEARCH.to_owned(),
-            WINDOW_TODO_SEARCH => WINDOW_PROJECTS.to_owned(),
+            WINDOW_TODO => WINDOW_DESCRIPTION.to_owned(),
+            WINDOW_DESCRIPTION => WINDOW_PROJECTS.to_owned(),
             _ => WINDOW_PROJECTS.to_owned(),
         }
     }
     fn cycle_focus_previous(&mut self) {
         self.focused_window = match self.focused_window.clone().as_str() {
-            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
-            WINDOW_PROJECTS => WINDOW_TODO_SEARCH.to_owned(),
-            WINDOW_TODO_SEARCH => WINDOW_TODO.to_owned(),
+            WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
+            WINDOW_PROJECTS => WINDOW_DESCRIPTION.to_owned(),
+            WINDOW_DESCRIPTION => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
             _ => WINDOW_PROJECTS.to_owned(),
         }
@@ -322,6 +332,7 @@ impl App {
     fn quit(&mut self) {}
 }
 
+///
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -332,7 +343,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 
     // App
     let app = App::new();
-    let res = run_app(&mut terminal, app);
+    let _res = run_app(&mut terminal, app);
 
     // Exit App
     disable_raw_mode()?;
@@ -350,34 +361,64 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     // select
     app.default_select();
     // draw
+    let mut textarea = TextArea::default();
     loop {
-        terminal.draw(|rect| ui(rect, &mut app))?;
-
-        // TODO I want to Tab through interfaces
-        if let Event::Key(key) = event::read().expect("Key error") {
-            match key.code {
-                KeyCode::Char('q') => {
-                    if app.focused_window == WINDOW_CONFIGS {
-                        app.show_popup = false;
-                        app.focused_window = WINDOW_PROJECTS.to_owned();
-                    } else {
-                        return Ok(());
-                    }
+        terminal.draw(|rect| 
+            {
+                ui(rect, &mut app);
+                // TODO make this a function which accepts textarea, rect, app
+                if app.show_popup && app.focused_window == WINDOW_POPUP_ADD_TODO.to_owned() {
+                    let size = rect.size();
+                    let area = centered_rect(40, 40, size);
+                    rect.render_widget(Clear, area); //this clears out the background
+                    
+                    let idx = app.projects.get_state_selected().unwrap();
+                    let project = &app.projects.items[idx];
+                    textarea.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(format!("Add task for {}", project.id)),
+                    );
+                    let widget = textarea.widget();
+                    rect.render_widget(widget, area);
                 }
-                // TODO add projects in current directory
-                KeyCode::Char('p') => app.popup(),
-                // TODO help box
-                KeyCode::Char('h') => app.popup(),
-                // KeyCode::Char('r') => app.reload(),
-                KeyCode::Char('a') => {}
-                // navigate
-                KeyCode::Char(';') => app.cycle_focus_next(),
-                KeyCode::Char('j') => app.cycle_focus_previous(),
-                KeyCode::Char('l') => app.next(),
-                KeyCode::Char('k') => app.previous(),
-                KeyCode::Enter => app.toggle(),
-                _ => {}
             }
+        )?;
+
+        match app.focused_window.as_str() {
+            WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
+                Input { key: Key::Esc,   ..} => app.popup_task_write_and_close(
+                    textarea.lines().join("\n").to_owned(),
+                ),
+                Input { key: Key::Enter, ..} => {},
+                input => {textarea.input(input);}
+            },
+            _ => if let Event::Key(key) = event::read().expect("Key error") {
+                match key.code {
+                    KeyCode::Char('q') => {
+                        if app.focused_window == WINDOW_POPUP_CONFIGS {
+                            app.show_popup = false;
+                            app.focused_window = WINDOW_PROJECTS.to_owned();
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    // TODO add projects in current directory
+                    KeyCode::Char('p') => app.popup(),
+                    // TODO help box
+                    KeyCode::Char('h') => {},
+                    // KeyCode::Char('r') => app.reload(),
+                    KeyCode::Char('a') => app.popup_add_task(),
+                    // TODO allow arrow keys as well
+                    KeyCode::Char(';') => app.cycle_focus_next(),
+                    KeyCode::Char('j') => app.cycle_focus_previous(),
+                    KeyCode::Char('l') => app.next(),
+                    KeyCode::Char('k') => app.previous(),
+                    KeyCode::Enter => app.toggle(),
+                    _ => {}
+                }
+            }
+            
         }
     }
 }
@@ -394,9 +435,8 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 Constraint::Length(03),
                 // table
                 Constraint::Percentage(50),
-                // todo list
+                // todo list and description
                 Constraint::Percentage(40),
-                // Constraint::Percentage(15),
             ]
             .as_ref(),
         )
@@ -432,20 +472,25 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .split(chunks[2]);
 
     let (left_todo_list, right_todo_search) = render_todo(&app);
-    rect.render_widget(left_todo_list, todo_chunks[0]);
+    rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
     rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // popup
-    // TODO fuzzy find
-    if app.show_popup {
-        let block_config = render_config_paths(&app);
-        // Block::default().title("Initialize").borders(Borders::ALL);
+    
+    // which popup is decided here
+    if app.show_popup && app.focused_window == WINDOW_POPUP_CONFIGS.to_owned() {
+        // TODO fuzzy find
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
-        rect.render_stateful_widget(block_config, area, &mut app.configs.state);
+        
+        // which popup is decided here
+        let popup = render_config_paths(&app);
+        rect.render_stateful_widget(popup, area, &mut app.configs.state);
     };
 }
 
+
+// TODO remove app reference. not needed
 fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
     let msg = "Press `p` to add projects".to_owned();
     let no_projects = Paragraph::new(msg)
@@ -607,11 +652,20 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .border_type(BorderType::Plain);
 
     // filter
+    let idx = app.projects.get_state_selected().unwrap();
+    let project = &app.projects.items[idx];
     let todo_items: Vec<ListItem> = app
         .todos
         .items
         .iter()
-        .map(|x| ListItem::new(x.todo.clone()))
+        .filter(|t| t.project_id ==  project.id)
+        .map(|t| 
+            if t.is_complete {
+                ListItem::new(format!("[x] {}", t.todo.clone()))
+            } else {
+                ListItem::new(format!("[ ] {}", t.todo.clone()))
+            }
+        )
         .collect();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
@@ -621,23 +675,24 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let search_todo_block = Block::default()
+    let desc_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(
             // TODO this can be a function
-            if app.focused_window == WINDOW_TODO_SEARCH {
+            if app.focused_window == WINDOW_DESCRIPTION {
                 Color::Yellow
             } else {
                 Color::White
             },
         ))
-        .title("(todo)")
+        .title("(desc: under construction)")
         .border_type(BorderType::Plain);
 
+    // TODO replace with paragraph and list
     let search_todo_items = vec![];
 
     let right = List::new(search_todo_items)
-        .block(search_todo_block)
+        .block(desc_block)
         .highlight_style(
             Style::default()
                 .bg(Color::Yellow)

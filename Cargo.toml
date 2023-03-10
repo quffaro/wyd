@@ -8,13 +8,14 @@ edition = "2021"
 [dependencies]
 regex = "1"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-crossterm = { version = "0.19", features = [ "serde" ] }
+crossterm = { version = "0.25", features = [ "serde" ] }
 shellexpand = "2.1.0"
 git2 = "0.14"
 glob = "0.3.1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.11.14", features = ["json"] }
-tui = { version = "0.14", default-features = false, features = ['crossterm', 'serde']}
+tui = { version = "0.19", default-features = false, features = ['crossterm', 'serde']}
+tui-textarea = "0.2"
 walkdir = "2.3.2"
 serde = {version = "1.0", features = ["derive"] }
 serde_json = "1.0"
