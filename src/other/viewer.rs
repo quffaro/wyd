@@ -221,7 +221,7 @@ struct App {
 const WINDOW_CONFIGS: &str = "configs";
 const WINDOW_PROJECTS: &str = "projects";
 const WINDOW_TODO: &str = "todo";
-const WINDOW_TODO_SEARCH: &str = "todo";
+const WINDOW_TODO_SEARCH: &str = "todo-search";
 const WINDOW_ADD_TODO: &str = "add-todo";
 
 // TODO does App need ListNavigate trait?
@@ -245,14 +245,14 @@ impl App {
         //     0 => self.configs.next(),
         //     _ => self.configs.next(),
         // }
-        match self.focused_window {
+        match self.focused_window.as_str() {
             WINDOW_PROJECTS => self.projects.next(),
             WINDOW_TODO => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
-        match self.focused_window {
+        match self.focused_window.as_str() {
             WINDOW_PROJECTS => self.projects.previous(),
             WINDOW_TODO => self.configs.previous(),
             _ => self.configs.previous(),
@@ -276,9 +276,9 @@ impl App {
     fn popup_add_task(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_ADD_TODO
+            self.focused_window = WINDOW_ADD_TODO.to_owned()
         } else {
-            self.focused_window = WINDOW_TODO;
+            self.focused_window = WINDOW_TODO.to_owned();
         }
     }
     fn default_select(&mut self) {
@@ -286,14 +286,14 @@ impl App {
         self.configs.state.select(Some(0));
     }
     fn toggle(&mut self) {
-        match self.focused_window {
+        match self.focused_window.as_str() {
             WINDOW_CONFIGS => self.configs.toggle(),
             WINDOW_TODO => self.projects.toggle(),
             _ => self.configs.toggle(),
         }
     }
     fn cycle_focus_next(&mut self) {
-        self.focused_window = match self.focused_window.clone() {
+        self.focused_window = match self.focused_window.clone().as_str() {
             WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_TODO_SEARCH.to_owned(),
@@ -302,7 +302,7 @@ impl App {
         }
     }
     fn cycle_focus_previous(&mut self) {
-        self.focused_window = match self.focused_window.clone() {
+        self.focused_window = match self.focused_window.clone().as_str() {
             WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_TODO_SEARCH.to_owned(),
             WINDOW_TODO_SEARCH => WINDOW_TODO.to_owned(),
