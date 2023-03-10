@@ -425,6 +425,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     }
 
     // chunk 2: todo list
+    // TODO do we need to specify percentages if they are uniform?
     let todo_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
@@ -437,11 +438,11 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     // popup
     // TODO fuzzy find
     if app.show_popup {
-        let block = render_config_paths(&app);
+        let block_config = render_config_paths(&app);
         // Block::default().title("Initialize").borders(Borders::ALL);
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
-        rect.render_stateful_widget(block, area, &mut app.configs.state);
+        rect.render_stateful_widget(block_config, area, &mut app.configs.state);
     };
 }
 
@@ -519,6 +520,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
 
     projects
 }
+
+// add task
 
 // render paths
 fn render_config_paths<'a>(app: &App) -> Table<'a> {
