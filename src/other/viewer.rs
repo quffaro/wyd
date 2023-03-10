@@ -3,7 +3,9 @@
 // [] search TODO in directory
 // [] press a to add project in current directory
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -13,13 +15,14 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{
-        Block, BorderType, Borders, Cell, Clear, List, ListState, Paragraph, Row, Table, TableState,
+        Block, BorderType, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table,
+        TableState,
     },
     Frame, Terminal,
 };
 use wyd::SEARCH_DIRECTORY_PREFIX;
 
-use super::sql::{read_project, read_tmp, update_tmp, write_tmp_to_project, read_todo};
+use super::sql::{read_project, read_tmp, read_todo, update_tmp, write_tmp_to_project};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
@@ -182,7 +185,6 @@ pub struct Todo {
     pub is_complete: bool,
 }
 
-
 impl ListItems<Todo> {
     fn new() -> ListItems<Todo> {
         ListItems {
@@ -213,7 +215,7 @@ struct App {
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
-    todos: ListItems<Todo>
+    todos: ListItems<Todo>,
 }
 
 // TODO does App need ListNavigate trait?
@@ -273,7 +275,7 @@ impl App {
             1 => 2,
             2 => 3,
             3 => 1,
-            _ => 1
+            _ => 1,
         }
     }
     fn cycle_focus_previous(&mut self) {
@@ -282,15 +284,14 @@ impl App {
             1 => 3,
             2 => 1,
             3 => 2,
-            _ => 1
+            _ => 1,
         }
     }
-    fn quit(&mut self) {
-
-    }
+    fn quit(&mut self) {}
     fn filter_todo(&mut self) -> Vec<Todo> {
         let project_id = self.projects.get_state_selected().unwrap() as u8;
-        self.todos.items
+        self.todos
+            .items
             .clone()
             .into_iter()
             .filter(|t| t.project_id == project_id)
@@ -331,33 +332,36 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
         // TODO I want to Tab through interfaces
         // if let Event::Key(key) = event::read().expect("Key error") {
-            // match key.code {
-            //     KeyCode::Char('q') => {
-            //         if app.selected_window == 0 {
-            //             app.show_popup = false;
-            //             app.selected_window = 1;
-            //         } else {
-            //             return Ok(());
-            //         }
-            //     }
-            //     // TODO add projects in current directory
-            //     KeyCode::Char('p') => app.popup(),
-            //     // TODO help box
-            //     KeyCode::Char('h') => app.popup(),
-            //     // KeyCode::Char('r') => app.reload(),
-            //     KeyCode::Tab => app.cycle_focus_next(),
-            //     // KeyCode::Tab => app.cycle_focus_previous(),
-            //     KeyCode::Enter => app.toggle(),
-            //     KeyCode::Down => app.next(),
-            //     KeyCode::Up => app.previous(),
-            //     _ => {}
-            // }
-            
+        // match key.code {
+        //     KeyCode::Char('q') => {
+        //         if app.selected_window == 0 {
+        //             app.show_popup = false;
+        //             app.selected_window = 1;
+        //         } else {
+        //             return Ok(());
+        //         }
+        //     }
+        //     // TODO add projects in current directory
+        //     KeyCode::Char('p') => app.popup(),
+        //     // TODO help box
+        //     KeyCode::Char('h') => app.popup(),
+        //     // KeyCode::Char('r') => app.reload(),
+        //     KeyCode::Tab => app.cycle_focus_next(),
+        //     // KeyCode::Tab => app.cycle_focus_previous(),
+        //     KeyCode::Enter => app.toggle(),
+        //     KeyCode::Down => app.next(),
+        //     KeyCode::Up => app.previous(),
+        //     _ => {}
+        // }
+
         // }
 
         if let Event::Key(key) = event::read().expect("Key error") {
             match key {
-                KeyEvent { code: KeyCode::Char('q'), modifiers: KeyModifiers::NONE } => {
+                KeyEvent {
+                    code: KeyCode::Char('q'),
+                    modifiers: KeyModifiers::NONE,
+                } => {
                     if app.selected_window == 0 {
                         app.show_popup = false;
                         app.selected_window = 1;
@@ -365,15 +369,36 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         return Ok(());
                     }
                 }
-                KeyEvent { code: KeyCode::Char('p'), modifiers: KeyModifiers::NONE} => app.popup(),
-                KeyEvent { code: KeyCode::Char('h'), modifiers: KeyModifiers::NONE} => app.popup(),
+                KeyEvent {
+                    code: KeyCode::Char('p'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.popup(),
+                KeyEvent {
+                    code: KeyCode::Char('h'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.popup(),
                 // TODO cycle previous does not work
-                KeyEvent { code: KeyCode::Char('j'), modifiers: KeyModifiers::NONE} => app.cycle_focus_previous(),
-                KeyEvent { code: KeyCode::Char(';'), modifiers: KeyModifiers::NONE} => app.cycle_focus_next(),
-                KeyEvent { code: KeyCode::Char('l'), modifiers: KeyModifiers::NONE} => app.next(),
-                KeyEvent { code: KeyCode::Char('k'), modifiers: KeyModifiers::NONE} => app.previous(),
-                KeyEvent { code: KeyCode::Enter,     modifiers: KeyModifiers::NONE} => app.toggle(),
-                _                                                                   => (),
+                KeyEvent {
+                    code: KeyCode::Char('j'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.cycle_focus_previous(),
+                KeyEvent {
+                    code: KeyCode::Char(';'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.cycle_focus_next(),
+                KeyEvent {
+                    code: KeyCode::Char('l'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.next(),
+                KeyEvent {
+                    code: KeyCode::Char('k'),
+                    modifiers: KeyModifiers::NONE,
+                } => app.previous(),
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::NONE,
+                } => app.toggle(),
+                _ => (),
             }
         }
     }
@@ -485,13 +510,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("Projects")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(
-                    if app.selected_window == 1 {
-                        Color::Yellow
-                    } else {
-                        Color::White
-                    }
-                ))
+                .style(Style::default().fg(if app.selected_window == 1 {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -595,13 +618,14 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
                 Color::Yellow
             } else {
                 Color::White
-            }
+            },
         ))
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    // filter 
-    let todo_items: Vec<String> = *&app.filter_todo().iter().map(|x| x.todo).collect();
+    // filter
+    // let todo_items: Vec<String> = *&app.filter_todo().iter().map(|x| x.todo).collect();
+    let todo_items: Vec<ListItem> = app.todos.items.iter().map(|x| ListItem::new(x)).collect();
     // vec![];
     // *&app.filter_todo().to_owned();
 
@@ -620,7 +644,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
                 Color::Yellow
             } else {
                 Color::White
-            }
+            },
         ))
         .title("(todo)")
         .border_type(BorderType::Plain);
