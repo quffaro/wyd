@@ -14,6 +14,7 @@ pub fn initialize() -> Result<(), rusqlite::Error> {
     initialize_db()?;
 
     // FIND CONFIG FILES
+    // TODO which are not in project table already...
     let tmp = fetch_config_files();
 
     // tmp

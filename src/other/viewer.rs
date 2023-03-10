@@ -228,6 +228,19 @@ impl FilteredListItems<Todo> {
             }
         }
     }
+    fn select_filter_state(&mut self, idx: Option<usize>, project_id: u8) {
+        self.state.select(idx);
+        self.filter_from_projects(project_id);
+    }
+    fn filter_from_projects(&mut self, project_id: u8) {
+        // let idx = self.projects.get_state_selected().unwrap();
+        // let project = &self.projects.items[idx];
+        let items = self.items.clone();
+        self.filtered = items
+            .into_iter()
+            .filter(|t| t.project_id == project_id)
+            .collect(); 
+    }
 }
 
 struct App {
@@ -329,7 +342,10 @@ impl App {
     fn default_select(&mut self) {
         self.projects.state.select(Some(0));
         self.configs.state.select(Some(0));
-        self.todos.state.select(Some(0));
+
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items[idx];
+        self.todos.select_filter_state(Some(0), project.id);
     }
     fn toggle(&mut self) {
         match self.focused_window.as_str() {
@@ -571,7 +587,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()
-                .title("Projects")
+                .title("(projects)")
                 .borders(Borders::ALL)
                 .style(
                     Style::default().fg(if app.focused_window == WINDOW_PROJECTS {
@@ -706,7 +722,13 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .bg(Color::Yellow)
+            .bg(
+                if app.focused_window == WINDOW_TODO {
+                    Color::Yellow
+                } else {
+                    Color::Gray
+                }
+            )
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );

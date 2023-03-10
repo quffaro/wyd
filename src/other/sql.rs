@@ -24,7 +24,7 @@ pub fn initialize_db() -> Result<(), rusqlite::Error> {
 }
 
 ///
-const READ_TMP: &str = "select path, is_selected from tmp_git_config where is_selected = 0";
+const READ_TMP: &str = "select path, is_selected from tmp_git_config where is_selected = 0 and path not in (select path from project)";
 pub fn read_tmp() -> Result<Vec<GitConfig>, rusqlite::Error> {
     let conn = Connection::open(wyd::DATABASE)?;
 
@@ -156,7 +156,8 @@ pub fn write_tmp(tmp: Vec<String>) -> Result<(), rusqlite::Error> {
 }
 
 /// all new tmps are written to
-const READ_TMP_SELECTED: &str    = "select path from tmp_git_config where is_selected = 1";
+// const READ_TMP_SELECTED: &str    = "select path from tmp_git_config where is_selected = 1";
+const READ_TMP_SELECTED: &str = "select path from tmp_git_config where is_selected = 1 and path not in (select path from project)";
 const WRITE_TMP_TO_PROJECT: &str = "insert or replace into project (path,name,cat,status) values (?1, ?2, ?3, ?4);";
 pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
