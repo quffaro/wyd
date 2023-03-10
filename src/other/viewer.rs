@@ -211,51 +211,74 @@ impl ListItems<Todo> {
 
 struct App {
     show_popup: bool,
-    selected_window: u8,
+    focused_window: String,
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
     todos: ListItems<Todo>,
 }
 
+const WINDOW_CONFIGS: &str = "configs";
+const WINDOW_PROJECTS: &str = "projects";
+const WINDOW_TODO: &str = "todo";
+const WINDOW_TODO_SEARCH: &str = "todo";
+const WINDOW_ADD_TODO: &str = "add-todo";
+
 // TODO does App need ListNavigate trait?
 impl App {
     fn new() -> App {
         App {
             show_popup: false,
-            selected_window: 1,
+            focused_window: "projects".to_owned(),
             message: "hiii".to_owned(),
-            // message: Vec::<Project>::new().len().to_string(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
             todos: ListItems::<Todo>::new(),
         }
     }
     fn next(&mut self) {
-        match self.selected_window {
-            1 => {
-                self.projects.next();
-                self.todos = ListItems::<Todo>::new();
-            }
-            0 => self.configs.next(),
+        // match self.selected_window {
+        //     1 => {
+        //         self.projects.next();
+        //         self.todos = ListItems::<Todo>::new();
+        //     }
+        //     0 => self.configs.next(),
+        //     _ => self.configs.next(),
+        // }
+        match self.focused_window {
+            WINDOW_PROJECTS => self.projects.next(),
+            WINDOW_TODO => self.configs.next(),
             _ => self.configs.next(),
         }
     }
     fn previous(&mut self) {
-        match self.selected_window {
-            1 => self.projects.previous(),
-            0 => self.configs.previous(),
+        match self.focused_window {
+            WINDOW_PROJECTS => self.projects.previous(),
+            WINDOW_TODO => self.configs.previous(),
             _ => self.configs.previous(),
         }
+        // match self.selected_window {
+        //     1 => self.projects.previous(),
+        //     0 => self.configs.previous(),
+        //     _ => self.configs.previous(),
+        // }
     }
     fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.selected_window = 0
+            self.focused_window = WINDOW_CONFIGS.to_owned();
         } else {
-            self.selected_window = 1;
+            self.focused_window = WINDOW_PROJECTS.to_owned();
             write_tmp_to_project();
             self.projects = TableItems::<Project>::new();
+        }
+    }
+    fn popup_add_task(&mut self) {
+        self.show_popup = !self.show_popup;
+        if self.show_popup {
+            self.focused_window = WINDOW_ADD_TODO
+        } else {
+            self.focused_window = WINDOW_TODO;
         }
     }
     fn default_select(&mut self) {
@@ -263,31 +286,30 @@ impl App {
         self.configs.state.select(Some(0));
     }
     fn toggle(&mut self) {
-        match self.selected_window {
-            0 => self.configs.toggle(),
-            1 => self.projects.toggle(),
+        match self.focused_window {
+            WINDOW_CONFIGS => self.configs.toggle(),
+            WINDOW_TODO => self.projects.toggle(),
             _ => self.configs.toggle(),
         }
     }
     fn cycle_focus_next(&mut self) {
-        self.selected_window = match self.selected_window.clone() {
-            0 => 0,
-            1 => 2,
-            2 => 3,
-            3 => 1,
-            _ => 1,
+        self.focused_window = match self.focused_window.clone() {
+            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
+            WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
+            WINDOW_TODO => WINDOW_TODO_SEARCH.to_owned(),
+            WINDOW_TODO_SEARCH => WINDOW_PROJECTS.to_owned(),
+            _ => WINDOW_PROJECTS.to_owned(),
         }
     }
     fn cycle_focus_previous(&mut self) {
-        self.selected_window = match self.selected_window.clone() {
-            0 => 0,
-            1 => 3,
-            2 => 1,
-            3 => 2,
-            _ => 1,
+        self.focused_window = match self.focused_window.clone() {
+            WINDOW_CONFIGS => WINDOW_CONFIGS.to_owned(),
+            WINDOW_PROJECTS => WINDOW_TODO_SEARCH.to_owned(),
+            WINDOW_TODO_SEARCH => WINDOW_TODO.to_owned(),
+            WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
+            _ => WINDOW_PROJECTS.to_owned(),
         }
     }
-    fn quit(&mut self) {}
     fn filter_todo(&mut self) -> Vec<Todo> {
         let project_id = self.projects.get_state_selected().unwrap() as u8;
         self.todos
@@ -297,6 +319,7 @@ impl App {
             .filter(|t| t.project_id == project_id)
             .collect()
     }
+    fn quit(&mut self) {}
 }
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
@@ -331,74 +354,29 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         terminal.draw(|rect| ui(rect, &mut app))?;
 
         // TODO I want to Tab through interfaces
-        // if let Event::Key(key) = event::read().expect("Key error") {
-        // match key.code {
-        //     KeyCode::Char('q') => {
-        //         if app.selected_window == 0 {
-        //             app.show_popup = false;
-        //             app.selected_window = 1;
-        //         } else {
-        //             return Ok(());
-        //         }
-        //     }
-        //     // TODO add projects in current directory
-        //     KeyCode::Char('p') => app.popup(),
-        //     // TODO help box
-        //     KeyCode::Char('h') => app.popup(),
-        //     // KeyCode::Char('r') => app.reload(),
-        //     KeyCode::Tab => app.cycle_focus_next(),
-        //     // KeyCode::Tab => app.cycle_focus_previous(),
-        //     KeyCode::Enter => app.toggle(),
-        //     KeyCode::Down => app.next(),
-        //     KeyCode::Up => app.previous(),
-        //     _ => {}
-        // }
-
-        // }
-
         if let Event::Key(key) = event::read().expect("Key error") {
-            match key {
-                KeyEvent {
-                    code: KeyCode::Char('q'),
-                    modifiers: KeyModifiers::NONE,
-                } => {
-                    if app.selected_window == 0 {
+            match key.code {
+                KeyCode::Char('q') => {
+                    if app.focused_window == WINDOW_CONFIGS {
                         app.show_popup = false;
-                        app.selected_window = 1;
+                        app.focused_window = WINDOW_PROJECTS.to_owned();
                     } else {
                         return Ok(());
                     }
                 }
-                KeyEvent {
-                    code: KeyCode::Char('p'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.popup(),
-                KeyEvent {
-                    code: KeyCode::Char('h'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.popup(),
-                // TODO cycle previous does not work
-                KeyEvent {
-                    code: KeyCode::Char('j'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.cycle_focus_previous(),
-                KeyEvent {
-                    code: KeyCode::Char(';'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.cycle_focus_next(),
-                KeyEvent {
-                    code: KeyCode::Char('l'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.next(),
-                KeyEvent {
-                    code: KeyCode::Char('k'),
-                    modifiers: KeyModifiers::NONE,
-                } => app.previous(),
-                KeyEvent {
-                    code: KeyCode::Enter,
-                    modifiers: KeyModifiers::NONE,
-                } => app.toggle(),
-                _ => (),
+                // TODO add projects in current directory
+                KeyCode::Char('p') => app.popup(),
+                // TODO help box
+                KeyCode::Char('h') => app.popup(),
+                // KeyCode::Char('r') => app.reload(),
+                KeyCode::Char('a') => {}
+                // navigate
+                KeyCode::Char(';') => app.cycle_focus_next(),
+                KeyCode::Char('j') => app.cycle_focus_previous(),
+                KeyCode::Char('l') => app.next(),
+                KeyCode::Char('k') => app.previous(),
+                KeyCode::Enter => app.toggle(),
+                _ => {}
             }
         }
     }
@@ -510,11 +488,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("Projects")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.selected_window == 1 {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }))
+                .style(
+                    Style::default().fg(if app.focused_window == WINDOW_PROJECTS {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }),
+                )
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -527,7 +507,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.selected_window == 1 {
+                .bg(if app.focused_window == WINDOW_PROJECTS {
                     Color::Yellow
                 } else {
                     Color::Gray
@@ -614,7 +594,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .borders(Borders::ALL)
         .style(Style::default().fg(
             // TODO this should be a rule
-            if app.selected_window == 2 {
+            if app.focused_window == WINDOW_TODO {
                 Color::Yellow
             } else {
                 Color::White
@@ -624,10 +604,12 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .border_type(BorderType::Plain);
 
     // filter
-    // let todo_items: Vec<String> = *&app.filter_todo().iter().map(|x| x.todo).collect();
-    let todo_items: Vec<ListItem> = app.todos.items.iter().map(|x| ListItem::new(x)).collect();
-    // vec![];
-    // *&app.filter_todo().to_owned();
+    let todo_items: Vec<ListItem> = app
+        .todos
+        .items
+        .iter()
+        .map(|x| ListItem::new(x.todo.clone()))
+        .collect();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
@@ -640,7 +622,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .borders(Borders::ALL)
         .style(Style::default().fg(
             // TODO this can be a function
-            if app.selected_window == 3 {
+            if app.focused_window == WINDOW_TODO_SEARCH {
                 Color::Yellow
             } else {
                 Color::White
