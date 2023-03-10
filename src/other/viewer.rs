@@ -80,8 +80,26 @@ struct ListItems<T> {
 }
 
 
-impl<T> ListNavigate for ListItems<T> 
-{
+impl<T> ListNavigate for ListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FilteredListItems<T> {
+    items: Vec<T>,
+    filtered: Vec<T>,
+    state: ListState,
+}
+
+impl<T> ListNavigate for FilteredListItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }
@@ -190,24 +208,21 @@ pub struct Todo {
     pub is_complete: bool,
 }
 
-impl ListItems<Todo> {
-    fn new() -> ListItems<Todo> {
-        ListItems {
+impl FilteredListItems<Todo> {
+    fn new() -> FilteredListItems<Todo> {
+        FilteredListItems {
             items: read_todo().expect("AA"),
-            // match project_id {
-            //     Some(i) => read_todo(i).expect("AA"),
-            //     None    => read_todo(0).expect("AA")
-            // },
+            filtered: vec![],
             state: ListState::default(),
         }
     }
     // TODO can this be a method for ListNavigate?
     fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
-        for i in 0..self.items.len() {
+        for i in 0..self.filtered.len() {
             if i == selected {
-                self.items[i].is_complete = !self.items[i].is_complete;
-                update_todo(&self.items[i]).expect("msg");
+                self.filtered[i].is_complete = !self.filtered[i].is_complete;
+                update_todo(&self.filtered[i]).expect("msg");
             } else {
                 continue;
             }
@@ -221,7 +236,7 @@ struct App {
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
-    todos: ListItems<Todo>,
+    todos: FilteredListItems<Todo>,
 }
 
 const WINDOW_PROJECTS: &str = "projects";
@@ -239,12 +254,23 @@ impl App {
             message: "hiii".to_owned(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
-            todos: ListItems::<Todo>::new(),
+            todos: FilteredListItems::<Todo>::new(),
         }
     }
     fn next(&mut self) {
         match self.focused_window.as_str() {
-            WINDOW_PROJECTS => {self.projects.next(); self.todos.select_state(Some(0));},
+            WINDOW_PROJECTS => {
+                self.projects.next(); 
+                //
+                let idx = self.projects.get_state_selected().unwrap();
+                let project = &self.projects.items[idx];
+                let items = self.todos.items.clone();
+                self.todos.filtered = items
+                    .into_iter()
+                    .filter(|t| t.project_id == project.id)
+                    .collect(); 
+                self.todos.select_state(Some(0));
+            },
             WINDOW_TODO => self.todos.next(),
             WINDOW_POPUP_CONFIGS => self.configs.next(),
             _ => self.configs.next(),
@@ -252,7 +278,18 @@ impl App {
     }
     fn previous(&mut self) {
         match self.focused_window.as_str() {
-            WINDOW_PROJECTS => {self.projects.previous(); self.todos.select_state(Some(0));},
+            WINDOW_PROJECTS => {
+                self.projects.previous(); 
+                //
+                let idx = self.projects.get_state_selected().unwrap();
+                let project = &self.projects.items[idx];
+                let items = self.todos.items.clone();
+                self.todos.filtered = items
+                    .into_iter()
+                    .filter(|t| t.project_id == project.id)
+                    .collect(); 
+                self.todos.select_state(Some(0));
+            },
             WINDOW_TODO => self.todos.previous(),
             WINDOW_POPUP_CONFIGS => self.configs.previous(),
             _ => self.configs.previous(),
@@ -287,7 +324,7 @@ impl App {
                 is_complete: false
             }]
         );
-        self.todos = ListItems::<Todo>::new();
+        self.todos = FilteredListItems::<Todo>::new();
     }
     fn default_select(&mut self) {
         self.projects.state.select(Some(0));
@@ -360,6 +397,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
     app.default_select();
+
     // draw
     let mut textarea = TextArea::default();
     loop {
@@ -471,6 +509,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
         .split(chunks[2]);
 
+    // filter
     let (left_todo_list, right_todo_search) = render_todo(&app);
     rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
     rect.render_widget(right_todo_search, todo_chunks[1]);
@@ -651,14 +690,11 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    // filter
-    let idx = app.projects.get_state_selected().unwrap();
-    let project = &app.projects.items[idx];
+    
     let todo_items: Vec<ListItem> = app
         .todos
-        .items
+        .filtered
         .iter()
-        .filter(|t| t.project_id ==  project.id)
         .map(|t| 
             if t.is_complete {
                 ListItem::new(format!("[x] {}", t.todo.clone()))

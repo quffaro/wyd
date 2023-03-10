@@ -102,8 +102,8 @@ pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
         todo.project_id,
         todo.todo.as_str(),
         match todo.is_complete {
-            true => 1,
-            _ => 0,
+            true => true,
+            _ => false,
         },
     ]).expect("AAA!");
 
@@ -122,8 +122,8 @@ pub fn write_new_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
             x.project_id,
             x.todo.as_str(),
             match x.is_complete {
-                true => 1,
-                _ => 0,
+                true => true,
+                _ => false,
             },
         ]).expect("AAA!");
     };
