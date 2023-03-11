@@ -19,13 +19,12 @@ use tui::{
 };
 use tui_textarea::{Input, Key, TextArea};
 use wyd::{
-    WindowStatus, CONFIG_PATH_SUFFIX, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
-    WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT,
-    WINDOW_PROJECTS, WINDOW_TODO,
+    Mode, WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION, WINDOW_POPUP_ADD_TODO,
+    WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT, WINDOW_PROJECTS, WINDOW_TODO,
 };
 
 use super::{
-    sql::{update_project_desc, write_new_todo, write_tmp_to_project},
+    sql::{db_delete_todo, update_project_desc, write_new_todo, write_tmp_to_project},
     structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo, Window},
 };
 
@@ -46,6 +45,7 @@ impl App {
             window: Window {
                 focus: WINDOW_PROJECTS.to_owned(),
                 status: WindowStatus::NotLoaded,
+                mode: Mode::Normal,
             },
             message: "hii".to_owned(),
             configs: TableItems::<GitConfig>::new(),
@@ -106,6 +106,7 @@ impl App {
         self.window = Window {
             focus: WINDOW_PROJECTS.to_owned(),
             status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
         }
     }
     fn popup_edit(&mut self) {
@@ -122,23 +123,38 @@ impl App {
             self.window = Window {
                 focus: WINDOW_POPUP_DESC.to_owned(),
                 status: WindowStatus::NotLoaded,
+                mode: Mode::Insert,
             }
         } else {
             self.window = Window {
                 focus: WINDOW_PROJECTS.to_owned(),
                 status: WindowStatus::NotLoaded,
+                mode: Mode::Insert,
             }
         }
     }
     // TODO we need to track the previous
+    fn delete_todo(&mut self) {
+        let idx = self.todos.get_state_selected().unwrap();
+        let todo = &self.todos.items.iter().nth(idx);
+        match todo {
+            Some(t) => {
+                db_delete_todo(t.id);
+                self.todos = FilteredListItems::<Todo>::new();
+                self.todo_sort();
+            }
+            None => {}
+        }
+    }
     fn popup_add_task(&mut self) {
         let idx = self.projects.get_state_selected().unwrap();
         let project = &self.projects.items.iter().nth(idx);
         match project {
-            Some(p) => {
+            Some(_) => {
                 self.show_popup = !self.show_popup;
                 if self.show_popup {
-                    self.window.focus = WINDOW_POPUP_ADD_TODO.to_owned()
+                    self.window.focus = WINDOW_POPUP_ADD_TODO.to_owned();
+                    self.window.mode = Mode::Insert;
                 }
             }
             None => self.message = "Add a project first".to_owned(),
@@ -169,6 +185,7 @@ impl App {
         self.window = Window {
             focus: WINDOW_PROJECTS.to_owned(),
             status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
         };
         let idx = self.projects.get_state_selected().unwrap();
         let project = &self.projects.items.iter().nth(idx);
@@ -215,7 +232,6 @@ impl App {
     }
     fn cycle_focus_previous(&mut self) {
         self.window.focus = match self.window.focus.clone().as_str() {
-            // WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_DESCRIPTION.to_owned(),
             WINDOW_DESCRIPTION => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
@@ -261,6 +277,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
     if app.show_popup {
+        // TODO stow this
         let idx = app.projects.get_state_selected().unwrap();
         let project = &app.projects.items.iter().nth(idx);
 
@@ -275,7 +292,10 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     textarea.set_block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .style(Style::default().fg(Color::Yellow))
+                            .style(Style::default().fg(match app.window.mode {
+                                Mode::Insert => Color::Yellow,
+                                Mode::Normal => Color::Green,
+                            }))
                             .title(format!("Add task for {}", p.id)),
                     );
                     let widget = textarea.widget();
@@ -347,62 +367,119 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         match app.window.focus.as_str() {
             // TODO write without committing...
             // TODO add Mode
-            WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
-                Input { key: Key::Esc, .. } => {
-                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Char('`'),
-                    ..
-                } => {
-                    app.close_popup();
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Enter, ..
-                } => {}
-                input => {
-                    textarea.input(input);
-                }
+            WINDOW_POPUP_ADD_TODO => match app.window.mode {
+                Mode::Insert => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('c'),
+                        ctrl: true,
+                        ..
+                    }
+                    | Input { key: Key::Esc, .. } => app.window.mode = Mode::Normal,
+                    Input {
+                        key: Key::Enter, ..
+                    } => {}
+                    input => {
+                        textarea.input(input);
+                    }
+                },
+                Mode::Normal => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('i'),
+                        ..
+                    } => app.window.mode = Mode::Insert,
+                    Input {
+                        key: Key::Char('w'),
+                        ..
+                    } => {
+                        app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
+                        textarea = TextArea::default();
+                    }
+                    Input {
+                        key: Key::Char('q'),
+                        ..
+                    } => {
+                        app.close_popup();
+                        textarea = TextArea::default();
+                    }
+                    _ => {}
+                },
+                _ => {}
             },
-            WINDOW_POPUP_EDIT => match crossterm::event::read()?.into() {
-                Input { key: Key::Esc, .. } => {
-                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Char('`'),
-                    ..
-                } => {
-                    app.close_popup();
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Enter, ..
-                } => {}
-                input => {
-                    textarea.input(input);
-                }
+            WINDOW_POPUP_EDIT => match app.window.mode {
+                Mode::Insert => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('c'),
+                        ctrl: true,
+                        ..
+                    }
+                    | Input { key: Key::Esc, .. } => app.window.mode = Mode::Normal,
+                    Input {
+                        key: Key::Enter, ..
+                    } => {}
+                    input => {
+                        textarea.input(input);
+                    }
+                },
+                Mode::Normal => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('i'),
+                        ..
+                    } => {
+                        app.window.mode = Mode::Insert;
+                    }
+                    Input {
+                        key: Key::Char('w'),
+                        ..
+                    } => {
+                        app.popup_desc_write_and_close(textarea.lines().join("\n").to_owned());
+                        textarea = TextArea::default();
+                    }
+                    Input {
+                        key: Key::Char('q'),
+                        ..
+                    } => {
+                        app.close_popup();
+                        textarea = TextArea::default();
+                    }
+                    input => {}
+                },
+                _ => {}
             },
-            WINDOW_POPUP_DESC => match crossterm::event::read()?.into() {
-                Input { key: Key::Esc, .. } => {
-                    app.popup_desc_write_and_close(textarea.lines().join("\n").to_owned());
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Char('`'),
-                    ..
-                } => {
-                    app.close_popup();
-                    textarea = TextArea::default();
-                }
-                Input {
-                    key: Key::Enter, ..
-                } => {}
-                input => {
-                    textarea.input(input);
-                }
+            WINDOW_POPUP_DESC => match app.window.mode {
+                Mode::Insert => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('c'),
+                        ctrl: true,
+                        ..
+                    }
+                    | Input { key: Key::Esc, .. } => app.window.mode = Mode::Normal,
+                    input => {
+                        textarea.input(input);
+                    }
+                },
+                Mode::Normal => match crossterm::event::read()?.into() {
+                    Input {
+                        key: Key::Char('i'),
+                        ..
+                    } => {
+                        app.window.mode = Mode::Insert;
+                    }
+                    Input {
+                        key: Key::Char('w'),
+                        ..
+                    } => {
+                        app.popup_desc_write_and_close(textarea.lines().join("\n").to_owned());
+                        textarea = TextArea::default();
+                    }
+                    Input {
+                        key: Key::Char('q'),
+                        ..
+                    } => {
+                        app.close_popup();
+                        textarea = TextArea::default();
+                    }
+                    _ => {}
+                },
             },
             _ => {
                 if let Event::Key(key) = event::read().expect("Key error") {
@@ -422,7 +499,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         // TODO help box
                         KeyCode::Char('h') => {}
                         // KeyCode::Char('r') => app.reload(),
-                        KeyCode::Char('a') => app.popup_add_task(),
+                        KeyCode::Char('i') => app.popup_add_task(),
                         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
                         KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
                         KeyCode::Char('l') | KeyCode::Down => app.next(),
@@ -455,7 +532,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(&*app.message)
+    let title = Paragraph::new(format!("{}", app.window.mode))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -610,7 +687,14 @@ fn render_config_paths<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title(title)
                 .borders(Borders::ALL)
-                .style(Style::default().fg(Color::Yellow).bg(Color::Black))
+                .style(
+                    Style::default()
+                        .fg(match app.window.mode {
+                            Mode::Insert => Color::Yellow,
+                            Mode::Normal => Color::Green,
+                        })
+                        .bg(Color::Black),
+                )
                 .border_type(BorderType::Plain),
         )
         .widths(&[Constraint::Length(50), Constraint::Length(20)])
@@ -656,10 +740,10 @@ fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .borders(Borders::ALL)
         .style(Style::default().fg(
             // TODO this should be a rule
-            if app.window.focus == WINDOW_TODO {
-                Color::Yellow
-            } else {
-                Color::White
+            match (app.window.focus.as_str(), app.window.mode) {
+                (WINDOW_TODO, Mode::Insert) => Color::Yellow,
+                (WINDOW_TODO, Mode::Normal) => Color::Green,
+                _ => Color::White,
             },
         ))
         .title("(todo)")

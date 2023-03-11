@@ -1,10 +1,10 @@
 use regex::{Captures, Regex};
-use rusqlite::{params, Connection};
+// use crate::types::ValueRef;
+use rusqlite::{params, Connection, Result};
 use wyd::{self, DATABASE, Status};
 
 use super::structs::{GitConfig, Project, Todo};
 
-// TODO refactor to include-sql
 
 /// CREATE TABLES
 const CREATE_CONFIG: &str  
@@ -44,7 +44,7 @@ pub fn read_tmp() -> Result<Vec<GitConfig>, rusqlite::Error> {
 
 ///
 // TODO not calling status
-const READ_PROJECT: &str = "select id,path,name,desc,cat,last_commit from project";
+const READ_PROJECT: &str = "select id,path,name,desc,cat,status,last_commit from project";
 pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
     let conn = Connection::open(wyd::DATABASE)?;
 
@@ -60,9 +60,8 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
                     None => "N/A".to_string(),
                 },
                 category: row.get(4)?,
-                status: Status::Stable,
-                // TODO is this the best way?
-                last_commit: match row.get(5)? {
+                status: row.get(5)?,                // TODO is this the best way?
+                last_commit: match row.get(6)? {
                     Some(x) => x,
                     None    => "N/A".to_string(),
                 }
@@ -85,6 +84,15 @@ pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqli
     Ok(())
 }
 
+const UPDATE_PROJECT_STATUS: &str = "update project set status = ?1 where id = ?2;";
+pub fn update_project_status(project: &Project) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_STATUS, (format!("{}", project.status), project.id))
+        .expect("A");
+
+    Ok(())
+}
 /// TODOs
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
 pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {
@@ -127,6 +135,16 @@ pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// TODOs
+const DELETE_TODO: &str = "delete from todo where id = (?)";
+pub fn db_delete_todo(id: u8) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(wyd::DATABASE)?;
+
+    let mut stmt = conn.prepare(DELETE_TODO)?;
+    stmt.execute(params![id]).expect("AAA!!");
+
+    Ok(())
+}
 const WRITE_NEW_TODO: &str = "insert or replace into todo (parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4);";
 pub fn write_new_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
