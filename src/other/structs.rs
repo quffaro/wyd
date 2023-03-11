@@ -1,8 +1,6 @@
-use tui::{
-    widgets::{ListState,TableState}
-};
-use wyd::Status;
 use super::sql::{read_project, read_tmp, read_todo, update_tmp, update_todo};
+use tui::widgets::{ListState, TableState};
+use wyd::Status;
 
 pub trait ListNavigate {
     fn get_items_len<'a>(&'a self) -> usize;
@@ -83,7 +81,6 @@ pub struct TableItems<T> {
     pub state: TableState,
 }
 
-
 impl<T> ListNavigate for TableItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
@@ -128,6 +125,7 @@ pub struct Project {
     pub id: u8,
     pub path: String,
     pub name: String,
+    // pub desc: String,
     pub category: String,
     pub status: Status,
     pub last_commit: String,
@@ -183,7 +181,8 @@ impl FilteredListItems<Todo> {
     }
     // TODO this is an imperfect one...
     pub fn sort_by_complete(&mut self) {
-        self.filtered.sort_by(|a,b| a.is_complete.cmp(&b.is_complete))
+        self.filtered
+            .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
     }
     // TODO can this be a method for ListNavigate?
     pub fn toggle(&mut self) {
@@ -207,6 +206,6 @@ impl FilteredListItems<Todo> {
         self.filtered = items
             .into_iter()
             .filter(|t| t.project_id == project_id)
-            .collect(); 
+            .collect();
     }
 }

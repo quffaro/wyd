@@ -3,29 +3,29 @@
 // [] search TODO in directory
 // [] press a to add project in current directory
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode,
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{io};
-use tui_textarea::{Input, Key, TextArea};
+use std::io;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{
-        Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table,
-    },
-    Frame, Terminal
+    widgets::{Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
+    Frame, Terminal,
 };
+use tui_textarea::{Input, Key, TextArea};
 use wyd::SEARCH_DIRECTORY_PREFIX;
-use wyd::{WINDOW_PROJECTS, WINDOW_TODO, WINDOW_DESCRIPTION, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_ADD_TODO};
+use wyd::{
+    WINDOW_DESCRIPTION, WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC,
+    WINDOW_POPUP_EDIT, WINDOW_PROJECTS, WINDOW_TODO,
+};
 
 use super::{
-    sql::{write_new_todo, write_tmp_to_project,}, 
-    structs::{Todo, GitConfig, Project, FilteredListItems, TableItems, ListNavigate}};
+    sql::{write_new_todo, write_tmp_to_project},
+    structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo},
+};
 
 struct App {
     show_popup: bool,
@@ -51,7 +51,7 @@ impl App {
     fn next(&mut self) {
         match self.focused_window.as_str() {
             WINDOW_PROJECTS => {
-                self.projects.next(); 
+                self.projects.next();
                 //
                 let idx = self.projects.get_state_selected().unwrap();
                 let project = &self.projects.items[idx];
@@ -59,9 +59,9 @@ impl App {
                 self.todos.filtered = items
                     .into_iter()
                     .filter(|t| t.project_id == project.id)
-                    .collect(); 
+                    .collect();
                 self.todos.select_state(Some(0));
-            },
+            }
             WINDOW_TODO => self.todos.next(),
             WINDOW_POPUP_CONFIGS => self.configs.next(),
             _ => self.configs.next(),
@@ -70,7 +70,7 @@ impl App {
     fn previous(&mut self) {
         match self.focused_window.as_str() {
             WINDOW_PROJECTS => {
-                self.projects.previous(); 
+                self.projects.previous();
                 //
                 let idx = self.projects.get_state_selected().unwrap();
                 let project = &self.projects.items[idx];
@@ -78,9 +78,9 @@ impl App {
                 self.todos.filtered = items
                     .into_iter()
                     .filter(|t| t.project_id == project.id)
-                    .collect(); 
+                    .collect();
                 self.todos.select_state(Some(0));
-            },
+            }
             WINDOW_TODO => self.todos.previous(),
             WINDOW_POPUP_CONFIGS => self.configs.previous(),
             _ => self.configs.previous(),
@@ -96,29 +96,60 @@ impl App {
             self.projects = TableItems::<Project>::new();
         }
     }
-    // TODO we need to track the previous
-    fn popup_add_task(&mut self) {
+    fn close_popup(&mut self) {
+        self.show_popup = !self.show_popup;
+        self.focused_window = WINDOW_PROJECTS.to_owned();
+    }
+    fn popup_edit(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_POPUP_ADD_TODO.to_owned()
-        } 
+            self.focused_window = WINDOW_POPUP_EDIT.to_owned();
+        } else {
+            self.focused_window = WINDOW_PROJECTS.to_owned();
+        }
+    }
+    fn popup_desc(&mut self) {
+        self.show_popup = !self.show_popup;
+        if self.show_popup {
+            self.focused_window = WINDOW_POPUP_DESC.to_owned();
+        } else {
+            self.focused_window = WINDOW_PROJECTS.to_owned();
+        }
+    }
+    // TODO we need to track the previous
+    fn popup_add_task(&mut self) {
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items.iter().nth(idx);
+        match project {
+            Some(p) => {
+                self.show_popup = !self.show_popup;
+                if self.show_popup {
+                    self.focused_window = WINDOW_POPUP_ADD_TODO.to_owned()
+                }
+            }
+            None => self.message = "Add a project first".to_owned(),
+        }
     }
     fn popup_task_write_and_close(&mut self, todo: String) {
-        let idx = self.projects.get_state_selected().unwrap();
-        let project = &self.projects.items[idx];
         self.focused_window = WINDOW_TODO.to_owned();
-            write_new_todo(vec![Todo {
-                id: 0,
-                parent_id: 0,
-                project_id: project.id,
-                todo: todo,
-                is_complete: false
-            }]
-        );
-        // TODO I want to simplify this...
-        self.todos = FilteredListItems::<Todo>::new(); 
-        self.todos.select_filter_state(Some(0), project.id);
-        self.todo_sort();
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items.iter().nth(idx);
+        match project {
+            Some(p) => {
+                write_new_todo(vec![Todo {
+                    id: 0,
+                    parent_id: 0,
+                    project_id: p.id,
+                    todo: todo,
+                    is_complete: false,
+                }]);
+                // TODO I want to simplify this...
+                self.todos = FilteredListItems::<Todo>::new();
+                self.todos.select_filter_state(Some(0), p.id);
+                self.todo_sort();
+            }
+            None => (),
+        }
     }
     fn todo_sort(&mut self) {
         self.todos.sort_by_complete()
@@ -128,8 +159,11 @@ impl App {
         self.configs.state.select(Some(0));
 
         let idx = self.projects.get_state_selected().unwrap();
-        let project = &self.projects.items[idx];
-        self.todos.select_filter_state(Some(0), project.id);
+        let project = &self.projects.items.iter().nth(idx);
+        match project {
+            Some(p) => self.todos.select_filter_state(Some(0), p.id),
+            None => (),
+        }
     }
     fn toggle(&mut self) {
         match self.focused_window.as_str() {
@@ -141,20 +175,20 @@ impl App {
     }
     fn cycle_focus_next(&mut self) {
         self.focused_window = match self.focused_window.clone().as_str() {
-            WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
+            // WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_DESCRIPTION.to_owned(),
             WINDOW_DESCRIPTION => WINDOW_PROJECTS.to_owned(),
-            _ => WINDOW_PROJECTS.to_owned(),
+            _ => self.focused_window.clone(),
         }
     }
     fn cycle_focus_previous(&mut self) {
         self.focused_window = match self.focused_window.clone().as_str() {
-            WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
+            // WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_DESCRIPTION.to_owned(),
             WINDOW_DESCRIPTION => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
-            _ => WINDOW_PROJECTS.to_owned(),
+            _ => self.focused_window.clone(),
         }
     }
     fn filter_todo(&mut self) -> Vec<Todo> {
@@ -194,6 +228,69 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
+    if app.show_popup {
+        let idx = app.projects.get_state_selected().unwrap();
+        let project = &app.projects.items.iter().nth(idx);
+
+        match app.focused_window.as_str() {
+            WINDOW_POPUP_ADD_TODO => match project {
+                Some(p) => {
+                    let size = rect.size();
+                    let area = centered_rect(40, 40, size);
+
+                    rect.render_widget(Clear, area); //s
+
+                    textarea.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .style(Style::default().fg(Color::Yellow))
+                            .title(format!("Add task for {}", p.id)),
+                    );
+                    let widget = textarea.widget();
+                    rect.render_widget(widget, area);
+                }
+                None => (),
+            },
+            WINDOW_POPUP_DESC => match project {
+                Some(p) => {
+                    let size = rect.size();
+                    let area = centered_rect(40, 40, size);
+                    rect.render_widget(Clear, area); //s
+
+                    textarea.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .style(Style::default().fg(Color::Yellow))
+                            .title(format!("Desc {}", p.id)),
+                    );
+                    let widget = textarea.widget();
+                    rect.render_widget(widget, area);
+                }
+                None => (),
+            },
+            WINDOW_POPUP_EDIT => match project {
+                Some(p) => {
+                    let size = rect.size();
+                    let area = centered_rect(40, 40, size);
+                    rect.render_widget(Clear, area); //s
+
+                    textarea.set_block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .style(Style::default().fg(Color::Yellow))
+                            .title(format!("Edit {}", p.id)),
+                    );
+                    let widget = textarea.widget();
+                    rect.render_widget(widget, area);
+                }
+                None => (),
+            },
+            _ => (),
+        }
+    }
+}
+
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
     app.default_select();
@@ -201,66 +298,119 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     // draw
     let mut textarea = TextArea::default();
     loop {
-        terminal.draw(|rect| 
-            {
-                ui(rect, &mut app);
-                // TODO make this a function which accepts textarea, rect, app
-                // TODO todos want date column
-                if app.show_popup && app.focused_window == WINDOW_POPUP_ADD_TODO.to_owned() {
-                    let size = rect.size();
-                    let area = centered_rect(40, 40, size);
-                    rect.render_widget(Clear, area); //s
-                    
-                    let idx = app.projects.get_state_selected().unwrap();
-                    let project = &app.projects.items[idx];
-                    textarea.set_block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(format!("Add task for {}", project.id)),
-                    );
-                    let widget = textarea.widget();
-                    rect.render_widget(widget, area);
-                }
-            }
-        )?;
+        terminal.draw(|rect| {
+            ui(rect, &mut app);
+            // TODO todos want date column
+            ui_popup(rect, &mut textarea, &mut app);
+            // if app.show_popup && app.focused_window == WINDOW_POPUP_ADD_TODO.to_owned() {
+            //     let size = rect.size();
+            //     let area = centered_rect(40, 40, size);
+            //     rect.render_widget(Clear, area); //s
+
+            //     let idx = app.projects.get_state_selected().unwrap();
+            //     let project = &app.projects.items.iter().nth(idx);
+            //     match project {
+            //         Some(p) => {
+            //             textarea.set_block(
+            //                 Block::default()
+            //                     .borders(Borders::ALL)
+            //                     .title(format!("Add task for {}", p.id)),
+            //             );
+            //             let widget = textarea.widget();
+            //             rect.render_widget(widget, area);
+            //         }
+            //         None => (),
+            //     }
+            // }
+        })?;
 
         match app.focused_window.as_str() {
             // TODO write without committing...
             WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
-                Input { key: Key::Esc,   ..} => {
-                    app.popup_task_write_and_close(
-                        textarea.lines().join("\n").to_owned()
-                    );
+                Input { key: Key::Esc, .. } => {
+                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
                     textarea = TextArea::default();
                 }
-                Input { key: Key::Enter, ..} => {},
-                input => {textarea.input(input);}
+                Input {
+                    key: Key::Char('`'),
+                    ..
+                } => {
+                    app.close_popup();
+                    textarea = TextArea::default();
+                }
+                Input {
+                    key: Key::Enter, ..
+                } => {}
+                input => {
+                    textarea.input(input);
+                }
             },
-            _ => if let Event::Key(key) = event::read().expect("Key error") {
-                match key.code {
-                    KeyCode::Char('q') => {
-                        if app.focused_window == WINDOW_POPUP_CONFIGS {
-                            app.show_popup = false;
-                            app.focused_window = WINDOW_PROJECTS.to_owned();
-                        } else {
-                            return Ok(());
+            WINDOW_POPUP_EDIT => match crossterm::event::read()?.into() {
+                Input { key: Key::Esc, .. } => {
+                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
+                    textarea = TextArea::default();
+                }
+                Input {
+                    key: Key::Char('`'),
+                    ..
+                } => {
+                    app.close_popup();
+                    textarea = TextArea::default();
+                }
+                Input {
+                    key: Key::Enter, ..
+                } => {}
+                input => {
+                    textarea.input(input);
+                }
+            },
+            WINDOW_POPUP_DESC => match crossterm::event::read()?.into() {
+                Input { key: Key::Esc, .. } => {
+                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
+                    textarea = TextArea::default();
+                }
+                Input {
+                    key: Key::Char('`'),
+                    ..
+                } => {
+                    app.close_popup();
+                    textarea = TextArea::default();
+                }
+                Input {
+                    key: Key::Enter, ..
+                } => {}
+                input => {
+                    textarea.input(input);
+                }
+            },
+            _ => {
+                if let Event::Key(key) = event::read().expect("Key error") {
+                    match key.code {
+                        KeyCode::Char('q') => {
+                            if app.focused_window == WINDOW_POPUP_CONFIGS {
+                                app.show_popup = false;
+                                app.focused_window = WINDOW_PROJECTS.to_owned();
+                            } else {
+                                return Ok(());
+                            }
                         }
+                        KeyCode::Char('e') => app.popup_edit(),
+                        KeyCode::Char('r') => app.popup_desc(),
+                        // TODO add projects in current directory
+                        KeyCode::Char('p') => app.popup(),
+                        // TODO help box
+                        KeyCode::Char('h') => {}
+                        // KeyCode::Char('r') => app.reload(),
+                        KeyCode::Char('a') => app.popup_add_task(),
+                        KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
+                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                        KeyCode::Enter => app.toggle(),
+                        _ => {}
                     }
-                    // TODO add projects in current directory
-                    KeyCode::Char('p') => app.popup(),
-                    // TODO help box
-                    KeyCode::Char('h') => {},
-                    // KeyCode::Char('r') => app.reload(),
-                    KeyCode::Char('a') => app.popup_add_task(),
-                    KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                    KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
-                    KeyCode::Char('l') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                    KeyCode::Enter => app.toggle(),
-                    _ => {}
                 }
             }
-            
         }
     }
 }
@@ -323,13 +473,12 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         // TODO fuzzy find
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
-        
+
         // which popup is decided here
         let popup = render_config_paths(&app);
         rect.render_stateful_widget(popup, area, &mut app.configs.state);
     };
 }
-
 
 // TODO remove app reference. not needed
 fn render_no_projects<'a>() -> Paragraph<'a> {
@@ -492,29 +641,26 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    
     let todo_items: Vec<ListItem> = app
         .todos
         .filtered
         .iter()
-        .map(|t| 
+        .map(|t| {
             if t.is_complete {
                 ListItem::new(format!("[x] {}", t.todo.clone()))
             } else {
                 ListItem::new(format!("[ ] {}", t.todo.clone()))
             }
-        )
+        })
         .collect();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .bg(
-                if app.focused_window == WINDOW_TODO {
-                    Color::Yellow
-                } else {
-                    Color::Gray
-                }
-            )
+            .bg(if app.focused_window == WINDOW_TODO {
+                Color::Yellow
+            } else {
+                Color::Gray
+            })
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
