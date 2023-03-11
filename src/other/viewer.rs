@@ -346,6 +346,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
         match app.window.focus.as_str() {
             // TODO write without committing...
+            // TODO add Mode
             WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
                 Input { key: Key::Esc, .. } => {
                     app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
@@ -695,7 +696,11 @@ fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     };
 
     let right = Paragraph::new(project_desc)
-        .block(Block::default().title("Paragraph").borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title("(description)")
+                .borders(Borders::ALL),
+        )
         .style(
             Style::default()
                 .fg(if app.window.focus == WINDOW_DESCRIPTION {
