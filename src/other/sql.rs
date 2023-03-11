@@ -4,11 +4,13 @@ use wyd::{self, DATABASE, Status};
 
 use super::structs::{GitConfig, Project, Todo};
 
+// TODO refactor to include-sql
+
 /// CREATE TABLES
 const CREATE_CONFIG: &str  
 = "CREATE TABLE IF NOT EXISTS tmp_git_config (path varchar(255) not null primary key, is_selected tinyint(1) default 0, UNIQUE(path));";
 const CREATE_PROJECT: &str 
-= "CREATE TABLE IF NOT EXISTS project (id integer primary key autoincrement, path varchar(255), name varchar(255), cat varchar(255), status varchar(255), last_commit varchar(255));";
+= "CREATE TABLE IF NOT EXISTS project (id integer primary key autoincrement, path varchar(255), name varchar(255), desc varchar(4000), cat varchar(255), status varchar(255), last_commit varchar(255));";
 const CREATE_TODO: &str    
 = "CREATE TABLE IF NOT EXISTS todo (id integer primary key autoincrement, parent_id integer, project_id integer, todo varchar(255), is_complete tinyint(1) default 0);";
 pub fn initialize_db() -> Result<(), rusqlite::Error> {
@@ -41,7 +43,8 @@ pub fn read_tmp() -> Result<Vec<GitConfig>, rusqlite::Error> {
 }
 
 ///
-const READ_PROJECT: &str = "select id,path,name,cat,status,last_commit from project";
+// TODO not calling status
+const READ_PROJECT: &str = "select id,path,name,desc,cat,last_commit from project";
 pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
     let conn = Connection::open(wyd::DATABASE)?;
 
@@ -52,7 +55,11 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
                 id: row.get(0)?,
                 path: row.get(1)?,
                 name: row.get(2)?,
-                category: row.get(3)?,
+                desc: match row.get(3)? {
+                    Some(x) => x,
+                    None => "N/A".to_string(),
+                },
+                category: row.get(4)?,
                 status: Status::Stable,
                 // TODO is this the best way?
                 last_commit: match row.get(5)? {
@@ -65,6 +72,17 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
         .collect();
 
     res
+}
+
+///
+const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
+pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
+        .expect("A");
+
+    Ok(())
 }
 
 /// TODOs
@@ -169,6 +187,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
                 id: 0,
                 path: row.get(0)?,
                 name: regex_repo(row.get(0)?),
+                desc: "Example".to_owned(),
                 category: "C".to_owned(),
                 status: Status::Unstable,
                 last_commit: "N/A".to_owned(),

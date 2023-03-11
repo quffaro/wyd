@@ -12,24 +12,26 @@ use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
+    widgets::{
+        Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
+    },
     Frame, Terminal,
 };
 use tui_textarea::{Input, Key, TextArea};
-use wyd::SEARCH_DIRECTORY_PREFIX;
 use wyd::{
-    WINDOW_DESCRIPTION, WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC,
-    WINDOW_POPUP_EDIT, WINDOW_PROJECTS, WINDOW_TODO,
+    WindowStatus, CONFIG_PATH_SUFFIX, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
+    WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT,
+    WINDOW_PROJECTS, WINDOW_TODO,
 };
 
 use super::{
-    sql::{write_new_todo, write_tmp_to_project},
-    structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo},
+    sql::{update_project_desc, write_new_todo, write_tmp_to_project},
+    structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo, Window},
 };
 
 struct App {
     show_popup: bool,
-    focused_window: String,
+    window: Window,
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
@@ -41,15 +43,18 @@ impl App {
     fn new() -> App {
         App {
             show_popup: false,
-            focused_window: "projects".to_owned(),
-            message: "hiii".to_owned(),
+            window: Window {
+                focus: WINDOW_PROJECTS.to_owned(),
+                status: WindowStatus::NotLoaded,
+            },
+            message: "hii".to_owned(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
             todos: FilteredListItems::<Todo>::new(),
         }
     }
     fn next(&mut self) {
-        match self.focused_window.as_str() {
+        match self.window.focus.as_str() {
             WINDOW_PROJECTS => {
                 self.projects.next();
                 //
@@ -68,7 +73,7 @@ impl App {
         }
     }
     fn previous(&mut self) {
-        match self.focused_window.as_str() {
+        match self.window.focus.as_str() {
             WINDOW_PROJECTS => {
                 self.projects.previous();
                 //
@@ -89,31 +94,40 @@ impl App {
     fn popup(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_POPUP_CONFIGS.to_owned();
+            self.window.focus = WINDOW_POPUP_CONFIGS.to_owned();
         } else {
-            self.focused_window = WINDOW_PROJECTS.to_owned();
+            self.window.focus = WINDOW_PROJECTS.to_owned();
             write_tmp_to_project();
             self.projects = TableItems::<Project>::new();
         }
     }
     fn close_popup(&mut self) {
         self.show_popup = !self.show_popup;
-        self.focused_window = WINDOW_PROJECTS.to_owned();
+        self.window = Window {
+            focus: WINDOW_PROJECTS.to_owned(),
+            status: WindowStatus::NotLoaded,
+        }
     }
     fn popup_edit(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_POPUP_EDIT.to_owned();
+            self.window.focus = WINDOW_POPUP_EDIT.to_owned();
         } else {
-            self.focused_window = WINDOW_PROJECTS.to_owned();
+            self.window.focus = WINDOW_PROJECTS.to_owned();
         }
     }
     fn popup_desc(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.focused_window = WINDOW_POPUP_DESC.to_owned();
+            self.window = Window {
+                focus: WINDOW_POPUP_DESC.to_owned(),
+                status: WindowStatus::NotLoaded,
+            }
         } else {
-            self.focused_window = WINDOW_PROJECTS.to_owned();
+            self.window = Window {
+                focus: WINDOW_PROJECTS.to_owned(),
+                status: WindowStatus::NotLoaded,
+            }
         }
     }
     // TODO we need to track the previous
@@ -124,14 +138,14 @@ impl App {
             Some(p) => {
                 self.show_popup = !self.show_popup;
                 if self.show_popup {
-                    self.focused_window = WINDOW_POPUP_ADD_TODO.to_owned()
+                    self.window.focus = WINDOW_POPUP_ADD_TODO.to_owned()
                 }
             }
             None => self.message = "Add a project first".to_owned(),
         }
     }
     fn popup_task_write_and_close(&mut self, todo: String) {
-        self.focused_window = WINDOW_TODO.to_owned();
+        self.window.focus = WINDOW_TODO.to_owned();
         let idx = self.projects.get_state_selected().unwrap();
         let project = &self.projects.items.iter().nth(idx);
         match project {
@@ -151,6 +165,23 @@ impl App {
             None => (),
         }
     }
+    fn popup_desc_write_and_close(&mut self, desc: String) {
+        self.window = Window {
+            focus: WINDOW_PROJECTS.to_owned(),
+            status: WindowStatus::NotLoaded,
+        };
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items.iter().nth(idx);
+        match project {
+            Some(p) => {
+                update_project_desc(p, desc).expect("A");
+                // reload projects but retain selection
+                self.projects = TableItems::<Project>::new();
+                self.projects.state.select(Some(idx));
+            }
+            None => (),
+        }
+    }
     fn todo_sort(&mut self) {
         self.todos.sort_by_complete()
     }
@@ -166,7 +197,7 @@ impl App {
         }
     }
     fn toggle(&mut self) {
-        match self.focused_window.as_str() {
+        match self.window.focus.as_str() {
             WINDOW_POPUP_CONFIGS => self.configs.toggle(),
             WINDOW_PROJECTS => self.projects.toggle(),
             WINDOW_TODO => self.todos.toggle(),
@@ -174,21 +205,21 @@ impl App {
         }
     }
     fn cycle_focus_next(&mut self) {
-        self.focused_window = match self.focused_window.clone().as_str() {
+        self.window.focus = match self.window.focus.clone().as_str() {
             // WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_DESCRIPTION.to_owned(),
             WINDOW_DESCRIPTION => WINDOW_PROJECTS.to_owned(),
-            _ => self.focused_window.clone(),
+            _ => self.window.focus.clone(),
         }
     }
     fn cycle_focus_previous(&mut self) {
-        self.focused_window = match self.focused_window.clone().as_str() {
+        self.window.focus = match self.window.focus.clone().as_str() {
             // WINDOW_POPUP_CONFIGS => WINDOW_POPUP_CONFIGS.to_owned(),
             WINDOW_PROJECTS => WINDOW_DESCRIPTION.to_owned(),
             WINDOW_DESCRIPTION => WINDOW_TODO.to_owned(),
             WINDOW_TODO => WINDOW_PROJECTS.to_owned(),
-            _ => self.focused_window.clone(),
+            _ => self.window.focus.clone(),
         }
     }
     fn filter_todo(&mut self) -> Vec<Todo> {
@@ -233,7 +264,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
         let idx = app.projects.get_state_selected().unwrap();
         let project = &app.projects.items.iter().nth(idx);
 
-        match app.focused_window.as_str() {
+        match app.window.focus.as_str() {
             WINDOW_POPUP_ADD_TODO => match project {
                 Some(p) => {
                     let size = rect.size();
@@ -258,6 +289,15 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     let area = centered_rect(40, 40, size);
                     rect.render_widget(Clear, area); //s
 
+                    match app.window.status {
+                        WindowStatus::NotLoaded => {
+                            textarea.insert_str(p.desc.as_str());
+                            app.window.status = WindowStatus::Loaded;
+                        }
+                        _ => (),
+                    }
+
+                    // textarea.insert_str(p.desc.as_str());
                     textarea.set_block(
                         Block::default()
                             .borders(Borders::ALL)
@@ -295,37 +335,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     // select
     app.default_select();
 
-    // draw
     let mut textarea = TextArea::default();
+    // draw
     loop {
         terminal.draw(|rect| {
             ui(rect, &mut app);
             // TODO todos want date column
             ui_popup(rect, &mut textarea, &mut app);
-            // if app.show_popup && app.focused_window == WINDOW_POPUP_ADD_TODO.to_owned() {
-            //     let size = rect.size();
-            //     let area = centered_rect(40, 40, size);
-            //     rect.render_widget(Clear, area); //s
-
-            //     let idx = app.projects.get_state_selected().unwrap();
-            //     let project = &app.projects.items.iter().nth(idx);
-            //     match project {
-            //         Some(p) => {
-            //             textarea.set_block(
-            //                 Block::default()
-            //                     .borders(Borders::ALL)
-            //                     .title(format!("Add task for {}", p.id)),
-            //             );
-            //             let widget = textarea.widget();
-            //             rect.render_widget(widget, area);
-            //         }
-            //         None => (),
-            //     }
-            // }
         })?;
 
-        match app.focused_window.as_str() {
+        match app.window.focus.as_str() {
             // TODO write without committing...
+            // TODO add Mode
             WINDOW_POPUP_ADD_TODO => match crossterm::event::read()?.into() {
                 Input { key: Key::Esc, .. } => {
                     app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
@@ -366,7 +387,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             },
             WINDOW_POPUP_DESC => match crossterm::event::read()?.into() {
                 Input { key: Key::Esc, .. } => {
-                    app.popup_task_write_and_close(textarea.lines().join("\n").to_owned());
+                    app.popup_desc_write_and_close(textarea.lines().join("\n").to_owned());
                     textarea = TextArea::default();
                 }
                 Input {
@@ -387,9 +408,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 if let Event::Key(key) = event::read().expect("Key error") {
                     match key.code {
                         KeyCode::Char('q') => {
-                            if app.focused_window == WINDOW_POPUP_CONFIGS {
+                            if app.window.focus == WINDOW_POPUP_CONFIGS {
                                 app.show_popup = false;
-                                app.focused_window = WINDOW_PROJECTS.to_owned();
+                                app.window.focus = WINDOW_PROJECTS.to_owned();
                             } else {
                                 return Ok(());
                             }
@@ -469,7 +490,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
 
     // popup
     // which popup is decided here
-    if app.show_popup && app.focused_window == WINDOW_POPUP_CONFIGS.to_owned() {
+    if app.show_popup && app.window.focus == WINDOW_POPUP_CONFIGS.to_owned() {
         // TODO fuzzy find
         let area = centered_rect(80, 40, size);
         rect.render_widget(Clear, area); //this clears out the background
@@ -509,7 +530,12 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .iter()
         .map(|p| {
             Row::new(vec![
-                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
+                Cell::from(
+                    p.name
+                        .replace(SEARCH_DIRECTORY_PREFIX, "...")
+                        .replace("/.git/config", "") // TODO into constant
+                        .clone(),
+                ),
                 // Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
                 Cell::from(p.category.clone()),
                 Cell::from(p.status.to_string().clone()),
@@ -524,13 +550,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(
-                    Style::default().fg(if app.focused_window == WINDOW_PROJECTS {
-                        Color::Yellow
-                    } else {
-                        Color::White
-                    }),
-                )
+                .style(Style::default().fg(if app.window.focus == WINDOW_PROJECTS {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -543,7 +567,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.focused_window == WINDOW_PROJECTS {
+                .bg(if app.window.focus == WINDOW_PROJECTS {
                     Color::Yellow
                 } else {
                     Color::Gray
@@ -627,12 +651,12 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
+fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(
             // TODO this should be a rule
-            if app.focused_window == WINDOW_TODO {
+            if app.window.focus == WINDOW_TODO {
                 Color::Yellow
             } else {
                 Color::White
@@ -656,7 +680,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .bg(if app.focused_window == WINDOW_TODO {
+            .bg(if app.window.focus == WINDOW_TODO {
                 Color::Yellow
             } else {
                 Color::Gray
@@ -665,30 +689,29 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let desc_block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(
-            // TODO this can be a function
-            if app.focused_window == WINDOW_DESCRIPTION {
-                Color::Yellow
-            } else {
-                Color::White
-            },
-        ))
-        .title("(desc: under construction)")
-        .border_type(BorderType::Plain);
+    let idx = app.projects.get_state_selected().unwrap();
+    let project_desc = match app.projects.items.iter().nth(idx) {
+        Some(p) => p.desc.to_owned(),
+        None => "".to_owned(),
+    };
 
-    // TODO replace with paragraph and list
-    let search_todo_items = vec![];
-
-    let right = List::new(search_todo_items)
-        .block(desc_block)
-        .highlight_style(
+    let right = Paragraph::new(project_desc)
+        .block(
+            Block::default()
+                .title("(description)")
+                .borders(Borders::ALL),
+        )
+        .style(
             Style::default()
-                .bg(Color::Yellow)
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        );
+                .fg(if app.window.focus == WINDOW_DESCRIPTION {
+                    Color::Yellow
+                } else {
+                    Color::Gray
+                })
+                .bg(Color::Black),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false });
 
     (left, right)
 }
