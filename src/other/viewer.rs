@@ -12,13 +12,16 @@ use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
+    widgets::{
+        Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
+    },
     Frame, Terminal,
 };
 use tui_textarea::{Input, Key, TextArea};
 use wyd::{
-    WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION, WINDOW_POPUP_ADD_TODO,
-    WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT, WINDOW_PROJECTS, WINDOW_TODO,
+    WindowStatus, CONFIG_PATH_SUFFIX, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
+    WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT,
+    WINDOW_PROJECTS, WINDOW_TODO,
 };
 
 use super::{
@@ -29,7 +32,6 @@ use super::{
 struct App {
     show_popup: bool,
     window: Window,
-    focused_window: String,
     message: String,
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
@@ -46,7 +48,6 @@ impl App {
                 status: WindowStatus::NotLoaded,
             },
             message: "hii".to_owned(),
-            focused_window: "projects".to_owned(),
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
             todos: FilteredListItems::<Todo>::new(),
@@ -164,13 +165,19 @@ impl App {
             None => (),
         }
     }
-    fn popup_desc_write_and_close(&mut self, todo: String) {
-        self.window.focus = WINDOW_TODO.to_owned();
+    fn popup_desc_write_and_close(&mut self, desc: String) {
+        self.window = Window {
+            focus: WINDOW_PROJECTS.to_owned(),
+            status: WindowStatus::NotLoaded,
+        };
         let idx = self.projects.get_state_selected().unwrap();
         let project = &self.projects.items.iter().nth(idx);
         match project {
             Some(p) => {
-                update_project_desc(p);
+                update_project_desc(p, desc).expect("A");
+                // reload projects but retain selection
+                self.projects = TableItems::<Project>::new();
+                self.projects.state.select(Some(idx));
             }
             None => (),
         }
@@ -522,7 +529,12 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .iter()
         .map(|p| {
             Row::new(vec![
-                Cell::from(p.name.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
+                Cell::from(
+                    p.name
+                        .replace(SEARCH_DIRECTORY_PREFIX, "...")
+                        .replace("/.git/config", "") // TODO into constant
+                        .clone(),
+                ),
                 // Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
                 Cell::from(p.category.clone()),
                 Cell::from(p.status.to_string().clone()),
@@ -638,7 +650,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
+fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(
@@ -676,30 +688,25 @@ fn render_todo<'a>(app: &App) -> (List<'a>, List<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let desc_block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(
-            // TODO this can be a function
-            if app.window.focus == WINDOW_DESCRIPTION {
-                Color::Yellow
-            } else {
-                Color::White
-            },
-        ))
-        .title("(desc: under construction)")
-        .border_type(BorderType::Plain);
+    let idx = app.projects.get_state_selected().unwrap();
+    let project_desc = match app.projects.items.iter().nth(idx) {
+        Some(p) => p.desc.to_owned(),
+        None => "".to_owned(),
+    };
 
-    // TODO replace with paragraph and list
-    let search_todo_items = vec![];
-
-    let right = List::new(search_todo_items)
-        .block(desc_block)
-        .highlight_style(
+    let right = Paragraph::new(project_desc)
+        .block(Block::default().title("Paragraph").borders(Borders::ALL))
+        .style(
             Style::default()
-                .bg(Color::Yellow)
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        );
+                .fg(if app.window.focus == WINDOW_DESCRIPTION {
+                    Color::Yellow
+                } else {
+                    Color::Gray
+                })
+                .bg(Color::Black),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false });
 
     (left, right)
 }

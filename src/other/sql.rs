@@ -76,10 +76,10 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
 
 ///
 const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
-pub fn update_project_desc(project: &Project) -> Result<(), rusqlite::Error> {
+pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
-    conn.execute(UPDATE_PROJECT_DESC, (&project.desc, &project.id))
+    conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
         .expect("A");
 
     Ok(())
