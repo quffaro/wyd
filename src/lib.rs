@@ -12,6 +12,8 @@ pub const WINDOW_TODO: &str = "todo";
 pub const WINDOW_DESCRIPTION: &str = "description";
 pub const WINDOW_POPUP_CONFIGS: &str = "configs";
 pub const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
+pub const WINDOW_POPUP_EDIT: &str = "edit";
+pub const WINDOW_POPUP_DESC: &str = "desc";
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Status {
