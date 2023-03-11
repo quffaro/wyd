@@ -1,9 +1,8 @@
-use crate::other::viewer::{GitConfig, Project, Status};
 use regex::{Captures, Regex};
 use rusqlite::{params, Connection};
-use wyd::{self, DATABASE};
+use wyd::{self, DATABASE, Status};
 
-use super::viewer::Todo;
+use super::structs::{GitConfig, Project, Todo};
 
 /// CREATE TABLES
 const CREATE_CONFIG: &str  
