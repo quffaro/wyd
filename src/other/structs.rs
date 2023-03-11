@@ -1,6 +1,11 @@
 use super::sql::{read_project, read_tmp, read_todo, update_tmp, update_todo};
 use tui::widgets::{ListState, TableState};
-use wyd::Status;
+use wyd::{Status, WindowStatus};
+
+pub struct Window {
+    pub focus: String,
+    pub status: WindowStatus,
+}
 
 pub trait ListNavigate {
     fn get_items_len<'a>(&'a self) -> usize;
@@ -125,7 +130,7 @@ pub struct Project {
     pub id: u8,
     pub path: String,
     pub name: String,
-    // pub desc: String,
+    pub desc: String,
     pub category: String,
     pub status: Status,
     pub last_commit: String,

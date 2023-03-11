@@ -26,3 +26,9 @@ impl fmt::Display for Status {
         write!(f, "{:?}", self)
     }
 }
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum WindowStatus {
+    Loaded,
+    NotLoaded,
+}
