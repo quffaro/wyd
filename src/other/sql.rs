@@ -136,12 +136,12 @@ pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
 }
 
 /// TODOs
-const DELETE_TODO: &str = "delete from todo where id = (?)";
+const DELETE_TODO: &str = "delete from todo where id = ?1;";
 pub fn db_delete_todo(id: u8) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(wyd::DATABASE)?;
 
-    let mut stmt = conn.prepare(DELETE_TODO)?;
-    stmt.execute(params![id]).expect("AAA!!");
+    conn.execute(DELETE_TODO, params![id])
+        .expect("A");
 
     Ok(())
 }

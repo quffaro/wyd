@@ -135,15 +135,26 @@ impl App {
     }
     // TODO we need to track the previous
     fn delete_todo(&mut self) {
-        let idx = self.todos.get_state_selected().unwrap();
-        let todo = &self.todos.items.iter().nth(idx);
-        match todo {
-            Some(t) => {
-                db_delete_todo(t.id);
-                self.todos = FilteredListItems::<Todo>::new();
-                self.todo_sort();
+        match self.window.focus.as_str() {
+            WINDOW_TODO => {
+                let (tidx, pidx) = (
+                    self.todos.get_state_selected().unwrap(),
+                    self.projects.get_state_selected().unwrap(),
+                );
+                let todo = &self.todos.items.iter().nth(tidx);
+                let project = &self.projects.items.iter().nth(pidx);
+                match (todo, project) {
+                    (Some(t), Some(p)) => {
+                        self.message = t.id.to_string();
+                        db_delete_todo(t.id);
+                        self.todos = FilteredListItems::<Todo>::new();
+                        self.todos.select_filter_state(Some(0), p.id);
+                        self.todo_sort();
+                    }
+                    (_, _) => {}
+                }
             }
-            None => {}
+            _ => {}
         }
     }
     fn popup_add_task(&mut self) {
@@ -497,6 +508,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         // TODO add projects in current directory
                         KeyCode::Char('p') => app.popup(),
                         // TODO help box
+                        KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('h') => {}
                         // KeyCode::Char('r') => app.reload(),
                         KeyCode::Char('i') => app.popup_add_task(),
@@ -532,7 +544,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{}", app.window.mode))
+    let title = Paragraph::new(format!("{}", app.message))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
