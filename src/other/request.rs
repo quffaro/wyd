@@ -1,3 +1,4 @@
+use futures::executor::block_on;
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
@@ -12,6 +13,25 @@ use tokio;
 #[derive(Deserialize, Debug)]
 struct Commit {
     body: String,
+}
+
+// #[tokio::main]
+pub async fn request_string() -> Result<()> {
+    let result = request();
+    match request().await? {
+        Ok(x) =>
+        // x.as_str().and_then(|x| Some(x.to_owned())),
+        {
+            println!("TEST");
+            println!("{:#?}", x.as_str());
+            Ok(())
+        }
+        Err(e) => {
+            println!("NO");
+            println!("{:#?}", e);
+            Ok(())
+        }
+    }
 }
 
 #[tokio::main]
@@ -55,15 +75,20 @@ pub async fn request() -> Result<serde_json::Value> {
         .json::<serde_json::Value>()
         .await?;
     // handle.done();
+    println!("{:#?}", response);
 
     // TODO we need error handling!!!
-    Ok(response
+    let result = response
         .get(0)
         .and_then(|v| v.get("commit"))
         .and_then(|v| v.get("committer"))
         .and_then(|v| v.get("date"))
-        .unwrap())
-    .cloned()
+        .unwrap();
+    // TODO map as_str through option?
+
+    println!("{:#?}", result);
+    Ok(result).cloned()
+    // .cloned()
     //UTC time, ISO 8601
     // Ok(())
 }
