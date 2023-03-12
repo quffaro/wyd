@@ -1,6 +1,4 @@
-use super::sql::{
-    read_project, read_tmp, read_todo, update_project_status, update_tmp, update_todo,
-};
+use super::sql::{read_project, read_tmp, read_todo, update_tmp, update_todo};
 use tui::widgets::{ListState, TableState};
 use wyd::{Mode, Status, WindowStatus};
 
@@ -145,9 +143,8 @@ impl Project {
             Status::Stable => Status::Unstable,
             Status::Unstable => Status::Stable,
             _ => Status::Unstable,
-        };
+        }
         // TODO we need to write this
-        update_project_status(self);
     }
 }
 
