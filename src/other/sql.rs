@@ -105,6 +105,17 @@ pub fn update_project_status(project: &Project) -> Result<(), rusqlite::Error> {
 
     Ok(())
 }
+
+const UPDATE_PROJECT_LAST_COMMIT: &str = "update project set last_commit = ?1;";
+pub fn update_project_last_commit(last_commit: String) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_LAST_COMMIT, params![last_commit])
+        .expect("AAA");
+
+    Ok(())
+}
+
 /// TODOs
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
 pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {

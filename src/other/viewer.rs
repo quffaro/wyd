@@ -24,6 +24,7 @@ use wyd::{
 };
 
 use super::{
+    initialize::initialize,
     sql::{db_delete_todo, update_project_desc, write_new_todo, write_tmp_to_project},
     structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo, Window},
 };
@@ -39,6 +40,10 @@ struct App {
 
 // TODO does App need ListNavigate trait?
 impl App {
+    fn init() -> App {
+        initialize();
+        App::new()
+    }
     fn new() -> App {
         App {
             show_popup: false,
@@ -271,7 +276,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // App
-    let app = App::new();
+    let app = App::init();
     let _res = run_app(&mut terminal, app);
 
     // Exit App

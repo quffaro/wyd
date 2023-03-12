@@ -1,4 +1,4 @@
-use futures::executor::block_on;
+use super::sql::update_project_last_commit;
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
@@ -15,26 +15,30 @@ struct Commit {
     body: String,
 }
 
-// #[tokio::main]
+#[tokio::main]
 pub async fn request_string() -> Result<()> {
-    let result = request();
-    match request().await? {
-        Ok(x) =>
-        // x.as_str().and_then(|x| Some(x.to_owned())),
-        {
-            println!("TEST");
-            println!("{:#?}", x.as_str());
-            Ok(())
-        }
-        Err(e) => {
-            println!("NO");
-            println!("{:#?}", e);
-            Ok(())
-        }
-    }
+    let request = request().await;
+    let string = request?.as_str().and_then(|x| Some(x.to_owned()));
+
+    // println!("{}", string.unwrap());
+    update_project_last_commit(string.unwrap());
+
+    Ok(())
+    // match result {
+    //     Ok(x) =>
+    //     {
+    //         x.as_str().and_then(|x| Some(x.to_owned()))
+    //         println!("{:#?}", x.as_str());
+    //         // Ok(())
+    //     }
+    //     Err(e) => {
+    //         println!("NO");
+    //         println!("{:#?}", e);
+    //         // Ok(())
+    //     }
+    // }
 }
 
-#[tokio::main]
 pub async fn request() -> Result<serde_json::Value> {
     let mut secret = fs::read_to_string("../pat/nav_pat.txt").expect("A");
     secret.pop();
@@ -71,11 +75,12 @@ pub async fn request() -> Result<serde_json::Value> {
         .get(&request_url)
         .query(&[("per_page", 1)])
         .send()
-        .await?
+        .await
+        .expect("AAA")
         .json::<serde_json::Value>()
         .await?;
     // handle.done();
-    println!("{:#?}", response);
+    // println!("{:#?}", response);
 
     // TODO we need error handling!!!
     let result = response
@@ -86,7 +91,7 @@ pub async fn request() -> Result<serde_json::Value> {
         .unwrap();
     // TODO map as_str through option?
 
-    println!("{:#?}", result);
+    // println!("{:#?}", result);
     Ok(result).cloned()
     // .cloned()
     //UTC time, ISO 8601
