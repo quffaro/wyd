@@ -1,7 +1,7 @@
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use std::fmt;
-use std::str::FromStr;
-use strum_macros::EnumString;
+// use std::str::FromStr;
+use strum_macros::{EnumIter, EnumString};
 use tui::style::Color;
 
 /// SQL
@@ -18,6 +18,14 @@ pub const WINDOW_POPUP_CONFIGS: &str = "configs";
 pub const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
 pub const WINDOW_POPUP_EDIT: &str = "edit";
 pub const WINDOW_POPUP_DESC: &str = "desc";
+
+#[derive(Debug, EnumIter)]
+pub enum Categories {
+    Math,
+    Haskell,
+    OCaml,
+    Rust,
+}
 
 #[derive(PartialEq, Eq, Debug, Clone, EnumString)]
 pub enum Status {
