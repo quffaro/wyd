@@ -144,7 +144,6 @@ impl Project {
         self.status = match self.status {
             Status::Stable => Status::Unstable,
             Status::Unstable => Status::Stable,
-            _ => Status::Unstable,
         };
         // TODO we need to write this
         update_project_status(self);

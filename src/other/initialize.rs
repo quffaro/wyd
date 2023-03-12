@@ -1,23 +1,33 @@
 // look through ~ and find .git files. stop recursing that directory when a .git file is found and
 // return its path
-use glob::{glob};
+use glob::glob;
 // use rusqlite::{Result};
+use crate::other::request::request_string;
+use crate::other::sql::{initialize_db, write_tmp};
 use shellexpand;
 use std::path::PathBuf;
-use wyd::{CONFIG_SEARCH_PREFIX, CONFIG_PATH_SUFFIX};
-use crate::other::sql::{initialize_db, write_tmp};
+use std::thread;
+use tokio;
+use wyd::{CONFIG_PATH_SUFFIX, CONFIG_SEARCH_PREFIX};
 
 // TODO need to find config files _not in projects._ We'll need our own table
-pub fn initialize() -> Result<(), rusqlite::Error> {
-
+#[tokio::main]
+pub async fn initialize() -> Result<(), rusqlite::Error> {
     // CREATE DATABASE
     initialize_db()?;
 
-    // FIND CONFIG FILES
-    // TODO which are not in project table already...
-    let tmp = fetch_config_files();
+    // TODO: this is not best practice according to tokio. This should also be a true asynchronous
+    // process, but our viewer still awaits this program. Initialize should be moved viewer and
+    // accept App so it can call App methods.
+    tokio::task::spawn_blocking(|| {
+        request_string();
+        println!("Bingus");
+    })
+    .await
+    .unwrap();
 
-    // tmp
+    // FIND CONFIG FILES
+    let tmp = fetch_config_files();
     write_tmp(tmp)
 }
 
@@ -40,5 +50,3 @@ fn fetch_config_files() -> Vec<String> {
 }
 
 // fn tmp_git_config
-
-
