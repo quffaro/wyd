@@ -1,22 +1,7 @@
-use regex::{Captures, Regex};
-// use crate::types::ValueRef;
+use regex::Regex;
 use rusqlite::{params, Connection, Result};
 use wyd::{self, DATABASE, Status};
-use tokio;
-use super::request::request;
 use super::structs::{GitConfig, Project, Todo};
-use serde::Deserialize;
-
-// #[tokio::main]
-// pub async fn fetch_last_commits(projects: Vec<Project>) -> Result<Vec<Projects>> {
-    
-//     for project in &mut projects {
-//         project.last_commit = request().unwrap();
-//     };
-
-//     Ok(())
-
-// }
 
 /// CREATE TABLES
 const CREATE_CONFIG: &str  
