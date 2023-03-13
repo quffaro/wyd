@@ -40,7 +40,8 @@ pub async fn request_string() -> Result<()> {
 }
 
 pub async fn request() -> Result<serde_json::Value> {
-    let mut secret = fs::read_to_string("../pat/nav_pat.txt").expect("A");
+    // TODO this needs better error handling...
+    let mut secret = fs::read_to_string("../pat/wyd_pat.txt").expect("A");
     secret.pop();
 
     let mut headers = header::HeaderMap::new();

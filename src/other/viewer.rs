@@ -6,7 +6,7 @@ use super::{
     initialize::initialize,
     sql::{
         db_delete_todo, update_project_category, update_project_desc, write_new_todo,
-        write_tmp_to_project,
+        write_project, write_tmp_to_project,
     },
     structs::{
         FilteredListItems, GitConfig, ListItems, ListNavigate, Project, TableItems, Todo, Window,
@@ -17,7 +17,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{fs::current_dir, io};
+use std::{env, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -29,7 +29,7 @@ use tui::{
 };
 use tui_textarea::{Input, Key, TextArea};
 use wyd::{
-    Category, Mode, WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
+    Category, Mode, Status, WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
     WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT,
     WINDOW_PROJECTS, WINDOW_TODO,
 };
@@ -71,13 +71,16 @@ impl App {
                 self.projects.next();
                 //
                 let idx = self.projects.get_state_selected().unwrap();
-                let project = &self.projects.items[idx];
-                let items = self.todos.items.clone();
-                self.todos.filtered = items
-                    .into_iter()
-                    .filter(|t| t.project_id == project.id)
-                    .collect();
-                self.todos.select_state(Some(0));
+                let project = &self.projects.items.iter().nth(idx);
+                match project {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered =
+                            items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
             }
             WINDOW_TODO => self.todos.next(),
             WINDOW_POPUP_CONFIGS => self.configs.next(),
@@ -91,13 +94,22 @@ impl App {
                 self.projects.previous();
                 //
                 let idx = self.projects.get_state_selected().unwrap();
-                let project = &self.projects.items[idx];
-                let items = self.todos.items.clone();
-                self.todos.filtered = items
-                    .into_iter()
-                    .filter(|t| t.project_id == project.id)
-                    .collect();
-                self.todos.select_state(Some(0));
+                let project = &self.projects.items.iter().nth(idx);
+                match project {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered =
+                            items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
+                // let items = self.todos.items.clone();
+                // self.todos.filtered = items
+                //     .into_iter()
+                //     .filter(|t| t.project_id == project.id)
+                //     .collect();
+                // self.todos.select_state(Some(0));
             }
             WINDOW_TODO => self.todos.previous(),
             WINDOW_POPUP_CONFIGS => self.configs.previous(),
@@ -106,7 +118,20 @@ impl App {
         }
     }
     fn add_project_in_dir(&mut self) {
-        let current_dir = current_dir();
+        let current_dir = env::current_dir().unwrap().display().to_string();
+        let name = current_dir.clone();
+        let project = Project {
+            id: 0,
+            path: current_dir,
+            name: name,
+            desc: "".to_owned(),
+            category: Category::Unknown,
+            status: Status::Unstable,
+            is_git: false,
+            last_commit: "N/A".to_owned(),
+        };
+        write_project(project);
+        self.projects = TableItems::<Project>::new();
     }
     fn popup_configs(&mut self) {
         match self.show_popup {
@@ -620,8 +645,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         }
                         KeyCode::Char('e') => app.popup_edit(),
                         KeyCode::Char('r') => app.popup_desc(),
-                        // TODO add projects in current directory
                         KeyCode::Char('p') => app.popup_configs(),
+                        // TODO add projects in current directory
+                        KeyCode::Char('a') => {app.add_project_in_dir(); app.message = "loaded".to_owned();},
                         // TODO help box
                         KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('h') => {}
@@ -659,7 +685,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{:#?}", app.show_popup))
+    let title = Paragraph::new(format!("{:#?}", app.message))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -674,7 +700,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
 
     // chunk 1: projects
     if app.projects.items.len() == 0 {
-        let no_projects = render_no_projects();
+        let no_projects = render_no_projects(&app);
         rect.render_widget(no_projects, chunks[1]);
     } else {
         let projects = render_projects(&app);
@@ -706,8 +732,8 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
 }
 
 // TODO remove app reference. not needed
-fn render_no_projects<'a>() -> Paragraph<'a> {
-    let msg = "Press `p` to add projects".to_owned();
+fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
+    let msg = "\n\n\n\n\n\n\n\n\n\n(press `p` to search for git configs)".to_owned();
     let no_projects = Paragraph::new(msg)
         .style(
             Style::default()
@@ -718,8 +744,9 @@ fn render_no_projects<'a>() -> Paragraph<'a> {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .title("(Projects)")
+                .style(Style::default().fg(
+                    if app.window.focus == WINDOW_PROJECTS {Color::Yellow} else {Color::White}))
+                .title("(projects)")
                 .border_type(BorderType::Plain),
         );
 
@@ -754,17 +781,18 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.window.focus == WINDOW_PROJECTS {
+                .style(Style::default().fg(
+                    if app.window.focus == WINDOW_PROJECTS {
                     Color::Yellow
                 } else {
                     Color::White
-                }))
+                }
+            ))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
         .widths(&[
             Constraint::Length(50),
-            // Constraint::Length(40),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(20),
@@ -779,7 +807,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol(">>");
+        .highlight_symbol(">> ");
 
     projects
 }
@@ -830,7 +858,7 @@ fn render_config_paths<'a>(app: &App) -> Table<'a> {
                 .bg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol(">>");
+        .highlight_symbol(">> ");
 
     paths
 }
@@ -869,7 +897,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
             // TODO this should be a rule
             match (app.window.focus.as_str(), app.window.mode) {
                 (WINDOW_TODO, Mode::Insert) => Color::Yellow,
-                (WINDOW_TODO, Mode::Normal) => Color::Green,
+                (WINDOW_TODO, Mode::Normal) => Color::Yellow,
                 _ => Color::White,
             },
         ))
@@ -923,7 +951,7 @@ fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
                 .fg(if app.window.focus == WINDOW_DESCRIPTION {
                     Color::Yellow
                 } else {
-                    Color::Gray
+                    Color::White
                 })
                 .bg(Color::Black),
         )

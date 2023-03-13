@@ -9,20 +9,21 @@ use tokio;
 use wyd::{CONFIG_PATH_SUFFIX, CONFIG_SEARCH_PREFIX};
 
 // TODO need to find config files _not in projects._ We'll need our own table
-#[tokio::main]
-pub async fn initialize() -> Result<(), rusqlite::Error> {
+// #[tokio::main]
+pub fn initialize() -> Result<(), rusqlite::Error> {
+// pub async fn initialize() -> Result<(), rusqlite::Error> {
     // CREATE DATABASE
     initialize_db()?;
 
     // TODO: this is not best practice according to tokio. This should also be a true asynchronous
     // process, but our viewer still awaits this program. Initialize should be moved viewer and
     // accept App so it can call App methods.
-    tokio::task::spawn_blocking(|| {
-        request_string();
-        // println!("Bingus");
-    })
-    .await
-    .unwrap();
+    // tokio::task::spawn_blocking(|| {
+    //     request_string();
+    //     // println!("Bingus");
+    // })
+    // .await
+    // .unwrap();
 
     // FIND CONFIG FILES
     let tmp = fetch_config_files();

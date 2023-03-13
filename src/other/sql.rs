@@ -17,7 +17,8 @@ const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     cat         varchar(255), 
     status      varchar(255),
     is_git      tinyint(1),
-    last_commit varchar(255)
+    last_commit varchar(255),
+    UNIQUE(path)
 );";
 const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     id          integer primary key autoincrement,
@@ -152,6 +153,26 @@ pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {
         .collect();
 
     res
+}
+
+const WRITE_PROJECT: &str = "insert or replace into project (
+    path, name, desc, cat, status, is_git, last_commit
+) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    let mut stmt = conn.prepare(WRITE_PROJECT)?;
+    stmt.execute(params![
+        project.path,
+        project.name,
+        project.desc,
+        project.category.to_string(),
+        project.status.to_string(),
+        project.is_git,
+        project.last_commit,
+    ]);
+
+    Ok(())
 }
 
 const UPDATE_TODO: &str = "insert or replace into todo (id,parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4, ?5);";

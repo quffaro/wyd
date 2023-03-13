@@ -17,30 +17,37 @@ pub trait ListNavigate {
     fn select_state<'a>(&'a mut self, idx: Option<usize>);
     //
     fn next(&mut self) {
-        let i = match self.get_state_selected() {
-            Some(i) => {
-                if i >= self.get_items_len() - 1 {
-                    0
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {},
+            (Some(i), l) => {
+                if i >= l - 1 {
+                    self.select_state(Some(0))
                 } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.select_state(Some(i));
+                    self.select_state(Some(i + 1))
+                };
+            },
+            (None, _) => self.select_state(Some(0)),
+        }
+
+        // let i = match self.get_state_selected() {
+        //     Some(i) => {
+        //         if i >= self.get_items_len() - 1 {
+        //             0
+        //         } else {
+        //             i + 1
+        //         }
+        //     }
+        //     None => 0,
+        // };
+        // self.select_state(Some(i));
     }
     fn previous(&mut self) {
-        let i = match self.get_state_selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.get_items_len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.select_state(Some(i));
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {},
+            (Some(0), l) => self.select_state(Some(l - 1)),
+            (Some(i), _) => self.select_state(Some(i + 1)),
+            (None, _) => self.select_state(Some(0)),
+        }
     }
     fn unselect(&mut self) {
         self.select_state(None);
