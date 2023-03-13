@@ -2,6 +2,16 @@
 // [] call github to see last push
 // [] search TODO in directory
 // [] press a to add project in current directory
+use super::{
+    initialize::initialize,
+    sql::{
+        db_delete_todo, update_project_category, update_project_desc, write_new_todo,
+        write_tmp_to_project,
+    },
+    structs::{
+        FilteredListItems, GitConfig, ListItems, ListNavigate, Project, TableItems, Todo, Window,
+    },
+};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -19,14 +29,9 @@ use tui::{
 };
 use tui_textarea::{Input, Key, TextArea};
 use wyd::{
-    Mode, WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION, WINDOW_POPUP_ADD_TODO,
-    WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT, WINDOW_PROJECTS, WINDOW_TODO,
-};
-
-use super::{
-    initialize::initialize,
-    sql::{db_delete_todo, update_project_desc, write_new_todo, write_tmp_to_project},
-    structs::{FilteredListItems, GitConfig, ListNavigate, Project, TableItems, Todo, Window},
+    Category, Mode, WindowStatus, SEARCH_DIRECTORY_PREFIX, WINDOW_DESCRIPTION,
+    WINDOW_POPUP_ADD_TODO, WINDOW_POPUP_CONFIGS, WINDOW_POPUP_DESC, WINDOW_POPUP_EDIT,
+    WINDOW_PROJECTS, WINDOW_TODO,
 };
 
 struct App {
@@ -36,6 +41,7 @@ struct App {
     configs: TableItems<GitConfig>,
     projects: TableItems<Project>,
     todos: FilteredListItems<Todo>,
+    categories: ListItems<Category>,
 }
 
 // TODO does App need ListNavigate trait?
@@ -56,6 +62,7 @@ impl App {
             configs: TableItems::<GitConfig>::new(),
             projects: TableItems::<Project>::new(),
             todos: FilteredListItems::<Todo>::new(),
+            categories: ListItems::<Category>::new(),
         }
     }
     fn next(&mut self) {
@@ -74,6 +81,7 @@ impl App {
             }
             WINDOW_TODO => self.todos.next(),
             WINDOW_POPUP_CONFIGS => self.configs.next(),
+            WINDOW_POPUP_EDIT => self.categories.next(),
             _ => self.configs.next(),
         }
     }
@@ -93,6 +101,7 @@ impl App {
             }
             WINDOW_TODO => self.todos.previous(),
             WINDOW_POPUP_CONFIGS => self.configs.previous(),
+            WINDOW_POPUP_EDIT => self.categories.previous(),
             _ => self.configs.previous(),
         }
     }
@@ -117,9 +126,11 @@ impl App {
     fn popup_edit(&mut self) {
         self.show_popup = !self.show_popup;
         if self.show_popup {
-            self.window.focus = WINDOW_POPUP_EDIT.to_owned();
-        } else {
-            self.window.focus = WINDOW_PROJECTS.to_owned();
+            self.window = Window {
+                focus: WINDOW_POPUP_EDIT.to_owned(),
+                status: WindowStatus::NotLoaded,
+                mode: Mode::Insert,
+            }
         }
     }
     fn popup_desc(&mut self) {
@@ -215,12 +226,37 @@ impl App {
             None => (),
         }
     }
+    fn popup_category_write_and_close(&mut self) {
+        self.window = Window {
+            focus: WINDOW_PROJECTS.to_owned(),
+            status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
+        };
+        let idx = self.projects.get_state_selected().unwrap();
+        let project = &self.projects.items.iter().nth(idx);
+        // TODO we do this a lot
+        let cat_idx = self.categories.get_state_selected().unwrap();
+        let cat = self.categories.items.iter().nth(cat_idx);
+        match (project, cat) {
+            (Some(p), Some(c)) => {
+                update_project_category(p, c).expect("A");
+                // reload projects but retain selection
+                self.projects = TableItems::<Project>::new();
+                self.projects.state.select(Some(idx));
+                //
+                self.categories.state.select(Some(0));
+            }
+            _ => (),
+        }
+    }
     fn todo_sort(&mut self) {
         self.todos.sort_by_complete()
     }
     fn default_select(&mut self) {
+        // TODO what if there aren't any?
         self.projects.state.select(Some(0));
         self.configs.state.select(Some(0));
+        self.categories.state.select(Some(0));
 
         let idx = self.projects.get_state_selected().unwrap();
         let project = &self.projects.items.iter().nth(idx);
@@ -346,19 +382,46 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 None => (),
             },
             WINDOW_POPUP_EDIT => match project {
-                Some(p) => {
+                Some(_) => {
                     let size = rect.size();
                     let area = centered_rect(40, 40, size);
                     rect.render_widget(Clear, area); //s
 
-                    textarea.set_block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .style(Style::default().fg(Color::Yellow))
-                            .title(format!("Edit {}", p.id)),
-                    );
-                    let widget = textarea.widget();
-                    rect.render_widget(widget, area);
+                    let category_block = Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(
+                            // TODO this should be a rule
+                            match (app.window.focus.as_str(), app.window.mode) {
+                                (WINDOW_POPUP_EDIT, Mode::Insert) => Color::Yellow,
+                                (WINDOW_POPUP_EDIT, Mode::Normal) => Color::Green,
+                                _ => Color::White,
+                            },
+                        ))
+                        .title("(todo)")
+                        .border_type(BorderType::Plain);
+
+                    let categories: Vec<ListItem> = app
+                        .categories
+                        .items
+                        .iter()
+                        .map(|t| ListItem::new(format!("{}", t)))
+                        .collect();
+
+                    let category_list = List::new(categories)
+                        .block(category_block)
+                        .highlight_style(
+                            Style::default()
+                                .bg(if app.window.focus == WINDOW_POPUP_EDIT {
+                                    Color::Yellow
+                                } else {
+                                    Color::Gray
+                                })
+                                .fg(Color::Black)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                        .highlight_symbol(">>");
+
+                    rect.render_stateful_widget(category_list, area, &mut app.categories.state);
                 }
                 None => (),
             },
@@ -419,46 +482,26 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     }
                     _ => {}
                 },
-                _ => {}
             },
-            WINDOW_POPUP_EDIT => match app.window.mode {
-                Mode::Insert => match crossterm::event::read()?.into() {
-                    Input {
-                        key: Key::Char('c'),
-                        ctrl: true,
-                        ..
-                    }
-                    | Input { key: Key::Esc, .. } => app.window.mode = Mode::Normal,
-                    Input {
-                        key: Key::Enter, ..
-                    } => {}
-                    input => {
-                        textarea.input(input);
-                    }
-                },
-                Mode::Normal => match crossterm::event::read()?.into() {
-                    Input {
-                        key: Key::Char('i'),
-                        ..
-                    } => {
-                        app.window.mode = Mode::Insert;
-                    }
-                    Input {
-                        key: Key::Char('w'),
-                        ..
-                    } => {
-                        app.popup_desc_write_and_close(textarea.lines().join("\n").to_owned());
-                        textarea = TextArea::default();
-                    }
-                    Input {
-                        key: Key::Char('q'),
-                        ..
-                    } => {
-                        app.close_popup();
-                        textarea = TextArea::default();
-                    }
-                    input => {}
-                },
+            WINDOW_POPUP_EDIT => match crossterm::event::read()?.into() {
+                Input {
+                    key: Key::Char('w'),
+                    ..
+                } => {
+                    // TODO change this
+                    app.popup_category_write_and_close();
+                }
+                Input {
+                    key: Key::Char('q'),
+                    ..
+                } => {
+                    app.close_popup();
+                }
+                Input { key: Key::Down, .. } => app.next(),
+                Input { key: Key::Up, .. } => app.previous(),
+                Input {
+                    key: Key::Enter, ..
+                } => app.toggle(),
                 _ => {}
             },
             WINDOW_POPUP_DESC => match app.window.mode {
@@ -631,7 +674,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                         .clone(),
                 ),
                 // Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
-                Cell::from(p.category.clone()),
+                Cell::from(p.category.to_string().clone()),
                 Cell::from(p.status.to_string().clone()),
                 Cell::from(p.last_commit.clone()),
             ])
