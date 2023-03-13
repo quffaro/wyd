@@ -118,20 +118,23 @@ impl App {
         }
     }
     fn add_project_in_dir(&mut self) {
-        let current_dir = env::current_dir().unwrap().display().to_string();
-        let name = current_dir.clone();
-        let project = Project {
-            id: 0,
-            path: current_dir,
-            name: name,
-            desc: "".to_owned(),
-            category: Category::Unknown,
-            status: Status::Unstable,
-            is_git: false,
-            last_commit: "N/A".to_owned(),
-        };
-        write_project(project);
-        self.projects = TableItems::<Project>::new();
+        if self.window.focus == WINDOW_PROJECTS {
+            // TODO this can be an implementation of Project
+            let current_dir = env::current_dir().unwrap().display().to_string();
+            let name = current_dir.clone();
+            let project = Project {
+                id: 0,
+                path: current_dir,
+                name: name,
+                desc: "".to_owned(),
+                category: Category::Unknown,
+                status: Status::Unstable,
+                is_git: false,
+                last_commit: "N/A".to_owned(),
+            };
+            write_project(project);
+            self.projects = TableItems::<Project>::new();
+        }
     }
     fn popup_configs(&mut self) {
         match self.show_popup {
@@ -444,7 +447,10 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     textarea.set_block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .style(Style::default().fg(Color::Yellow))
+                            .style(Style::default().fg(match app.window.mode {
+                                Mode::Insert => Color::Yellow,
+                                Mode::Normal => Color::Green,
+                            }))
                             .title(format!("Desc {}", p.id)),
                     );
                     let widget = textarea.widget();
@@ -647,7 +653,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         KeyCode::Char('r') => app.popup_desc(),
                         KeyCode::Char('p') => app.popup_configs(),
                         // TODO add projects in current directory
-                        KeyCode::Char('a') => {app.add_project_in_dir(); app.message = "loaded".to_owned();},
+                        KeyCode::Char('a') => app.add_project_in_dir(),
                         // TODO help box
                         KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('h') => {}
@@ -744,8 +750,11 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .style(Style::default().fg(
-                    if app.window.focus == WINDOW_PROJECTS {Color::Yellow} else {Color::White}))
+                .style(Style::default().fg(if app.window.focus == WINDOW_PROJECTS {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }))
                 .title("(projects)")
                 .border_type(BorderType::Plain),
         );
@@ -781,13 +790,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(
-                    if app.window.focus == WINDOW_PROJECTS {
+                .style(Style::default().fg(if app.window.focus == WINDOW_PROJECTS {
                     Color::Yellow
                 } else {
                     Color::White
-                }
-            ))
+                }))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))

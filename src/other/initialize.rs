@@ -1,11 +1,11 @@
 // look through ~ and find .git files. stop recursing that directory when a .git file is found and
 // return its path
-use crate::other::request::request_string;
+
 use crate::other::sql::{initialize_db, write_tmp};
 use glob::glob;
 use shellexpand;
 use std::path::PathBuf;
-use tokio;
+
 use wyd::{CONFIG_PATH_SUFFIX, CONFIG_SEARCH_PREFIX};
 
 // TODO need to find config files _not in projects._ We'll need our own table

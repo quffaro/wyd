@@ -7,7 +7,7 @@ use super::sql::update_project_last_commit;
 use reqwest::{header, ClientBuilder, Result};
 use serde::Deserialize;
 use std::fs;
-use std::time::Duration;
+
 use tokio;
 
 #[derive(Deserialize, Debug)]

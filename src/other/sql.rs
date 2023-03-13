@@ -156,7 +156,13 @@ pub fn read_todo() -> Result<Vec<Todo>, rusqlite::Error> {
 }
 
 const WRITE_PROJECT: &str = "insert or replace into project (
-    path, name, desc, cat, status, is_git, last_commit
+    path,
+    name, 
+    desc, 
+    cat, 
+    status, 
+    is_git, 
+    last_commit
 ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
 pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
@@ -175,7 +181,13 @@ pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
-const UPDATE_TODO: &str = "insert or replace into todo (id,parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4, ?5);";
+const UPDATE_TODO: &str = "insert or replace into todo (
+    id,
+    parent_id,
+    project_id,
+    todo,
+    is_complete
+) values (?1, ?2, ?3, ?4, ?5);";
 pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
@@ -206,7 +218,12 @@ pub fn db_delete_todo(id: u8) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 const WRITE_NEW_TODO: &str =
-    "insert or replace into todo (parent_id,project_id,todo,is_complete) values (?1, ?2, ?3, ?4);";
+    "insert or replace into todo (
+        parent_id,
+        project_id,
+        todo,
+        is_complete
+) values (?1, ?2, ?3, ?4);";
 pub fn write_new_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
