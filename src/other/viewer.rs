@@ -403,7 +403,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
     if app.show_popup {
-        // TODO stow this
+        // TODO wrap this rule into an impl
         let idx = app.projects.get_state_selected().unwrap();
         let project = &app.projects.items.iter().nth(idx);
 
@@ -451,7 +451,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                                 Mode::Insert => Color::Yellow,
                                 Mode::Normal => Color::Green,
                             }))
-                            .title(format!("Desc {}", p.id)),
+                            .title(format!("Description for {}", p.id)),
                     );
                     let widget = textarea.widget();
                     rect.render_widget(widget, area);
