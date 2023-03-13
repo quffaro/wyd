@@ -146,6 +146,7 @@ pub struct Project {
     pub desc: String,
     pub category: Category,
     pub status: Status,
+    pub is_git: bool,
     pub last_commit: String,
 }
 
