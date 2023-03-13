@@ -62,14 +62,14 @@ pub async fn request() -> Result<serde_json::Value> {
         repo = repo
     );
 
-    let timeout = Duration::new(5, 0);
+    // let timeout = Duration::new(5, 0);
     // let handle = SpinnerBuilder::new()
     //     .spinner(&DOTS)
     //     .text("Loading...")
     //     .start();
     let client = ClientBuilder::new()
         .default_headers(headers)
-        .timeout(timeout)
+        // .timeout(timeout)
         .build()?;
     let response = client
         .get(&request_url)

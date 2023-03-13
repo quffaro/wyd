@@ -1,8 +1,9 @@
 use super::sql::{
     read_project, read_tmp, read_todo, update_project_status, update_tmp, update_todo,
 };
+use strum::IntoEnumIterator;
 use tui::widgets::{ListState, TableState};
-use wyd::{Mode, Status, WindowStatus};
+use wyd::{Category, Mode, Status, WindowStatus};
 
 pub struct Window {
     pub focus: String,
@@ -61,6 +62,15 @@ impl<T> ListNavigate for ListItems<T> {
     }
     fn select_state<'a>(&'a mut self, idx: Option<usize>) {
         self.state.select(idx)
+    }
+}
+
+impl ListItems<Category> {
+    pub fn new() -> ListItems<Category> {
+        ListItems {
+            items: Category::iter().collect(),
+            state: ListState::default(),
+        }
     }
 }
 
@@ -134,7 +144,7 @@ pub struct Project {
     pub path: String,
     pub name: String,
     pub desc: String,
-    pub category: String,
+    pub category: Category,
     pub status: Status,
     pub last_commit: String,
 }

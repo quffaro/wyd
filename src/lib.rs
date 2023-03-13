@@ -8,6 +8,7 @@ use tui::style::Color;
 pub const DATABASE: &str = "projects.db";
 pub const SEARCH_DIRECTORY_PREFIX: &str = "/home/cuffaro/Documents"; // CUFFARO IS NOT GUARANTEED!
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
+// TODO needs ot be dynamic
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 
 /// WINDOWS
@@ -19,12 +20,28 @@ pub const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
 pub const WINDOW_POPUP_EDIT: &str = "edit";
 pub const WINDOW_POPUP_DESC: &str = "desc";
 
-#[derive(Debug, EnumIter)]
-pub enum Categories {
+#[derive(PartialEq, Eq, Debug, Clone, EnumString, EnumIter)]
+pub enum Category {
+    Unknown,
     Math,
     Haskell,
     OCaml,
     Rust,
+}
+
+impl fmt::Display for Category {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl FromSql for Category {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse::<Category>()
+            .map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, EnumString)]

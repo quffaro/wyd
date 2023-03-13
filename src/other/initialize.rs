@@ -1,12 +1,10 @@
 // look through ~ and find .git files. stop recursing that directory when a .git file is found and
 // return its path
-use glob::glob;
-// use rusqlite::{Result};
 use crate::other::request::request_string;
 use crate::other::sql::{initialize_db, write_tmp};
+use glob::glob;
 use shellexpand;
 use std::path::PathBuf;
-use std::thread;
 use tokio;
 use wyd::{CONFIG_PATH_SUFFIX, CONFIG_SEARCH_PREFIX};
 
@@ -21,7 +19,7 @@ pub async fn initialize() -> Result<(), rusqlite::Error> {
     // accept App so it can call App methods.
     tokio::task::spawn_blocking(|| {
         request_string();
-        println!("Bingus");
+        // println!("Bingus");
     })
     .await
     .unwrap();

@@ -1,6 +1,6 @@
 use regex::Regex;
 use rusqlite::{params, Connection, Result};
-use wyd::{self, DATABASE, Status};
+use wyd::{self, DATABASE, Status, Category};
 use super::structs::{GitConfig, Project, Todo};
 
 /// CREATE TABLES
@@ -76,6 +76,16 @@ pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqli
     let conn = Connection::open(DATABASE)?;
 
     conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
+        .expect("A");
+
+    Ok(())
+}
+
+const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
+pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", cat), project.id))
         .expect("A");
 
     Ok(())
@@ -214,7 +224,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
                 path: row.get(0)?,
                 name: regex_repo(row.get(0)?),
                 desc: "Example".to_owned(),
-                category: "C".to_owned(),
+                category: Category::Unknown,
                 status: Status::Unstable,
                 last_commit: "N/A".to_owned(),
             })}
@@ -227,7 +237,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
         write_stmt.execute([
             x.path,
             x.name,
-            x.category,
+            x.category.to_string(),
             x.status.to_string(),
         ]).expect("AAA!");
     };
