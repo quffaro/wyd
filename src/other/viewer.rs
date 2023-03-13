@@ -17,7 +17,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{fs, io};
+use std::{fs::current_dir, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -104,6 +104,9 @@ impl App {
             WINDOW_POPUP_EDIT => self.categories.previous(),
             _ => self.configs.previous(),
         }
+    }
+    fn add_project_in_dir(&mut self) {
+        let current_dir = current_dir();
     }
     fn popup_configs(&mut self) {
         match self.show_popup {
