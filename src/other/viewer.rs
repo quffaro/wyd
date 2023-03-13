@@ -17,7 +17,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::io;
+use std::{fs, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -105,14 +105,21 @@ impl App {
             _ => self.configs.previous(),
         }
     }
-    fn popup(&mut self) {
-        self.show_popup = !self.show_popup;
-        if self.show_popup {
-            self.window.focus = WINDOW_POPUP_CONFIGS.to_owned();
-        } else {
-            self.window.focus = WINDOW_PROJECTS.to_owned();
-            write_tmp_to_project();
-            self.projects = TableItems::<Project>::new();
+    fn popup_configs(&mut self) {
+        match self.show_popup {
+            false => {
+                self.show_popup = !self.show_popup;
+                self.window.focus = WINDOW_POPUP_CONFIGS.to_owned()
+            }
+            true => {
+                self.show_popup = !self.show_popup;
+                self.window.focus = WINDOW_PROJECTS.to_owned();
+                write_tmp_to_project();
+                self.projects = TableItems::<Project>::new();
+                // TODO projects as a ListNavigate trait can accept int, rather than ask state
+                // select to be called directly
+                self.projects.state.select(Some(0));
+            }
         }
     }
     fn close_popup(&mut self) {
@@ -124,30 +131,66 @@ impl App {
         }
     }
     fn popup_edit(&mut self) {
-        self.show_popup = !self.show_popup;
-        if self.show_popup {
-            self.window = Window {
-                focus: WINDOW_POPUP_EDIT.to_owned(),
-                status: WindowStatus::NotLoaded,
-                mode: Mode::Insert,
+        match (self.show_popup, self.projects.items.len()) {
+            (_, 0) => {}
+            (false, _) => {
+                self.show_popup = !self.show_popup;
+                self.window = Window {
+                    focus: WINDOW_POPUP_EDIT.to_owned(),
+                    status: WindowStatus::NotLoaded,
+                    mode: Mode::Insert,
+                }
+            }
+            (true, _) => {
+                self.show_popup = !self.show_popup;
+                self.window.focus = WINDOW_PROJECTS.to_owned();
+                // write_tmp_to_project();
+                self.projects = TableItems::<Project>::new();
             }
         }
+
+        // if self.show_popup {
+        //     self.window = Window {
+        //         focus: WINDOW_POPUP_EDIT.to_owned(),
+        //         status: WindowStatus::NotLoaded,
+        //         mode: Mode::Insert,
+        //     }
+        // }
     }
     fn popup_desc(&mut self) {
-        self.show_popup = !self.show_popup;
-        if self.show_popup {
-            self.window = Window {
-                focus: WINDOW_POPUP_DESC.to_owned(),
-                status: WindowStatus::NotLoaded,
-                mode: Mode::Insert,
+        match (self.show_popup, self.projects.items.len()) {
+            (_, 0) => {}
+            (false, _) => {
+                self.show_popup = !self.show_popup;
+                self.window = Window {
+                    focus: WINDOW_POPUP_DESC.to_owned(),
+                    status: WindowStatus::NotLoaded,
+                    mode: Mode::Insert,
+                }
             }
-        } else {
-            self.window = Window {
-                focus: WINDOW_PROJECTS.to_owned(),
-                status: WindowStatus::NotLoaded,
-                mode: Mode::Insert,
+            (true, _) => {
+                self.show_popup = !self.show_popup;
+                self.window = Window {
+                    focus: WINDOW_PROJECTS.to_owned(),
+                    status: WindowStatus::NotLoaded,
+                    mode: Mode::Insert,
+                }
             }
         }
+
+        // if self.show_popup {
+        //     self.window = Window {
+        //         focus: WINDOW_POPUP_DESC.to_owned(),
+        //         status: WindowStatus::NotLoaded,
+        //         mode: Mode::Insert,
+        //     }
+        // } else {
+        //     self.window = Window {
+        //         focus: WINDOW_PROJECTS.to_owned(),
+        //         status: WindowStatus::NotLoaded,
+        //         mode: Mode::Insert,
+        //     }
+        // }
     }
     // TODO we need to track the previous
     fn delete_todo(&mut self) {
@@ -174,17 +217,17 @@ impl App {
         }
     }
     fn popup_add_task(&mut self) {
-        let idx = self.projects.get_state_selected().unwrap();
-        let project = &self.projects.items.iter().nth(idx);
-        match project {
-            Some(_) => {
+        match (self.show_popup, self.projects.items.len()) {
+            (false, 0) => self.message = "Add a project first".to_owned(),
+            (false, _) => {
                 self.show_popup = !self.show_popup;
-                if self.show_popup {
-                    self.window.focus = WINDOW_POPUP_ADD_TODO.to_owned();
-                    self.window.mode = Mode::Insert;
+                self.window = Window {
+                    focus: WINDOW_POPUP_ADD_TODO.to_owned(),
+                    status: WindowStatus::NotLoaded,
+                    mode: Mode::Insert,
                 }
             }
-            None => self.message = "Add a project first".to_owned(),
+            (true, _) => {}
         }
     }
     fn popup_task_write_and_close(&mut self, todo: String) {
@@ -504,6 +547,27 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 } => app.toggle(),
                 _ => {}
             },
+            WINDOW_POPUP_CONFIGS => match crossterm::event::read()?.into() {
+                Input {
+                    key: Key::Char('w'),
+                    ..
+                } => {
+                    // TODO change this
+                    app.popup_configs();
+                }
+                Input {
+                    key: Key::Char('q'),
+                    ..
+                } => {
+                    app.close_popup();
+                }
+                Input { key: Key::Down, .. } => app.next(),
+                Input { key: Key::Up, .. } => app.previous(),
+                Input {
+                    key: Key::Enter, ..
+                } => app.toggle(),
+                _ => {}
+            },
             WINDOW_POPUP_DESC => match app.window.mode {
                 Mode::Insert => match crossterm::event::read()?.into() {
                     Input {
@@ -554,7 +618,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         KeyCode::Char('e') => app.popup_edit(),
                         KeyCode::Char('r') => app.popup_desc(),
                         // TODO add projects in current directory
-                        KeyCode::Char('p') => app.popup(),
+                        KeyCode::Char('p') => app.popup_configs(),
                         // TODO help box
                         KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('h') => {}
@@ -592,7 +656,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{}", app.message))
+    let title = Paragraph::new(format!("{:#?}", app.show_popup))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -833,11 +897,17 @@ fn render_todo<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let idx = app.projects.get_state_selected().unwrap();
-    let project_desc = match app.projects.items.iter().nth(idx) {
-        Some(p) => p.desc.to_owned(),
+    let project_desc = match app.projects.get_state_selected() {
+        Some(i) => match app.projects.items.iter().nth(i) {
+            Some(p) => p.desc.to_owned(),
+            None => "".to_owned(),
+        },
         None => "".to_owned(),
     };
+    // let project_desc = match app.projects.items.iter().nth(idx) {
+    //     Some(p) => p.desc.to_owned(),
+    //     None => "".to_owned(),
+    // };
 
     let right = Paragraph::new(project_desc)
         .block(
