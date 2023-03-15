@@ -1,14 +1,19 @@
-use crate::refactor::new_sql::write_project;
+use crate::refactor::new_sql::{
+    initialize_db, read_project, read_todo, write_new_todo, write_project, update_project_desc,
+};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
+use rusqlite::{
+    types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
+    Connection,
+};
 use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
-use tui::widgets::{ListState, TableState};
+use tui::widgets::{ListItem, ListState, TableState};
 use tui::{
     style::Color,
     widgets::{List, Table},
@@ -68,7 +73,7 @@ pub trait ListNavigate {
         match (self.get_state_selected(), self.get_items_len()) {
             (_, 0) => {}
             (Some(0), l) => self.select_state(Some(l - 1)),
-            (Some(i), _) => self.select_state(Some(i + 1)),
+            (Some(i), _) => self.select_state(Some(i - 1)),
             (None, _) => self.select_state(Some(0)),
         }
     }
@@ -103,6 +108,7 @@ impl ListItems<Category> {
             state: ListState::default(),
         }
     }
+    // TODO toggle
 }
 
 #[derive(Clone, Debug)]
@@ -163,6 +169,7 @@ impl<T> ListNavigate for TableItems<T> {
     }
 }
 
+
 #[derive(Clone, Debug)]
 pub struct GitConfig {
     pub path: String,
@@ -171,6 +178,7 @@ pub struct GitConfig {
 
 impl GitConfig {
     pub fn load() -> Vec<GitConfig> {
+        // TODO
         // read_tmp().unwrap()
         vec![]
     }
@@ -209,9 +217,9 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn load() -> Vec<Project> {
-        // read_project().expect("READ PROJECT ERROR")
-        vec![]
+    pub fn load(conn: Option<Connection>) -> Vec<Project> {
+        read_project(conn).expect("READ PROJECT ERROR")
+        // vec![]
     }
     pub fn new_in_pwd() -> Project {
         let current_dir = env::current_dir().unwrap().display().to_string();
@@ -239,15 +247,23 @@ impl Project {
 }
 
 impl TableItems<Project> {
-    pub fn load() -> TableItems<Project> {
+    pub fn load(conn: Option<Connection>) -> TableItems<Project> {
         TableItems {
-            items: Project::load(),
+            items: Project::load(conn),
             state: TableState::default(),
         }
     }
-    pub fn current(&mut self) -> Option<&Project> {
-        let idx = self.get_state_selected().unwrap();
-        self.items.iter().nth(idx)
+    pub fn current(& self) -> Option<&Project> {
+        match self.get_state_selected() {
+            Some(idx) => self.items.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn current_state(& self) -> (Option<usize>, Option<&Project>) {
+        match self.get_state_selected() {
+            Some(idx) => (Some(idx), self.items.iter().nth(idx)),
+            None => (None,None),
+        }
     }
     pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
@@ -272,10 +288,9 @@ pub struct Todo {
 }
 
 impl FilteredListItems<Todo> {
-    pub fn load() -> FilteredListItems<Todo> {
+    pub fn load(conn: Option<Connection>) -> FilteredListItems<Todo> {
         FilteredListItems {
-            items: vec![],
-            // read_todo().expect("AA"),
+            items: read_todo(conn).expect("AA"),
             filtered: vec![],
             state: ListState::default(),
         }
@@ -291,7 +306,7 @@ impl FilteredListItems<Todo> {
         for i in 0..self.filtered.len() {
             if i == selected {
                 self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                // update_todo(&self.filtered[i]).expect("msg");
+                // TODO update_todo(&self.filtered[i]).expect("msg");
             } else {
                 continue;
             }
@@ -357,7 +372,7 @@ impl ListItems<BaseWindow> {
     }
 }
 
-#[derive(EnumIter, EnumString)]
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
 pub enum PopupWindow {
     None,
     SearchGitConfig,
@@ -462,19 +477,75 @@ pub struct App {
 }
 
 impl App {
-    fn new() -> App {
+    fn load(conn: Option<Connection>) -> App {
         App {
             message: "hiii".to_owned(),
             window: Window::new(),
             configs: TableItems::<GitConfig>::load(),
-            projects: TableItems::<Project>::load(),
-            todos: FilteredListItems::<Todo>::load(),
+            projects: TableItems::<Project>::load(conn),
+            todos: FilteredListItems::<Todo>::load(None),
             categories: ListItems::<Category>::new(),
         }
     }
     pub fn init() -> App {
+        let conn = Connection::open(DATABASE).unwrap();
         // INITIALIZE DB
-        App::new()
+        initialize_db();
+        App::load(Some(conn))
+    }
+    pub fn next(&mut self) {
+        match self.window {
+            Window {popup: PopupWindow::None, base: BaseWindow::Project, .. } => {
+                self.projects.next();
+                // TODO move to update 
+                match self.projects.current() {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered = items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
+            }
+            Window {popup: PopupWindow::None, base: BaseWindow::Todo, .. } => self.todos.next(),
+            Window {popup: PopupWindow::SearchGitConfig, base: _, .. } => self.configs.next(),
+            Window {popup: PopupWindow::EditCategory, base: _, .. } => self.categories.next(),
+            _ => {}
+        }
+    }
+    pub fn previous(&mut self) {
+        match self.window {
+            Window {popup: PopupWindow::None, base: BaseWindow::Project, .. } => {
+                self.projects.previous();
+                // TODO move to update 
+                match self.projects.current() {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered = items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
+            }
+            Window {popup: PopupWindow::None, base: BaseWindow::Todo, .. } => self.todos.previous(),
+            Window {popup: PopupWindow::SearchGitConfig, base: _, .. } => self.configs.previous(),
+            Window {popup: PopupWindow::EditCategory, base: _, .. } => self.categories.previous(),
+            _ => {}
+        }
+    }
+    pub fn cycle_focus_next(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Todo,
+            BaseWindow::Todo => BaseWindow::Description,
+            BaseWindow::Description => BaseWindow::Project,
+        }
+    }
+    pub fn cycle_focus_previous(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Description,
+            BaseWindow::Todo => BaseWindow::Project,
+            BaseWindow::Description => BaseWindow::Todo,
+        }
     }
     pub fn default_select(&mut self) {
         // TODO what if there aren't any?
@@ -505,49 +576,20 @@ impl App {
                     is_git: false,
                     last_commit: "N/A".to_owned(),
                 });
-                self.projects = TableItems::<Project>::load();
+                self.projects = TableItems::<Project>::load(None);
+                self.projects.select_state(Some(0));
             }
             _ => {}
         }
     }
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow) {
-        // self.window.popup = popup
+        self.window.popup = popup
     }
     pub fn close_popup(&mut self) {
         self.window.popup = PopupWindow::None;
+        self.window.status = WindowStatus::NotLoaded;
     }
-    /// INPUT
-    pub fn input(&mut self, textarea: &mut TextArea) {
-        match self.window {
-            Window {
-                popup: PopupWindow::None,
-                base: _,
-                ..
-            } => {
-                if let Event::Key(key) = event::read().expect("Key Error") {
-                    match key.code {
-                        KeyCode::Char('d') => self.delete_todo(),
-                        KeyCode::Char('i') => self.popup(PopupWindow::AddTodo),
-                        KeyCode::Char(';') | KeyCode::Right => self.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left => self.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down => self.next(),
-                        KeyCode::Char('k') | KeyCode::Up => self.previous(),
-                        KeyCode::Enter => self.toggle(),
-                        _ => {}
-                    }
-                }
-            }
-            Window {
-                popup: _, base: _, ..
-            } => match self.window.mode {
-                Mode::Insert => self.popup_mode_insert(textarea),
-                Mode::Normal => self.popup_mode_normal(textarea),
-            },
-            _ => {}
-        }
-    }
-    // TODO result
     pub fn popup_mode_insert(&mut self, textarea: &mut TextArea) {
         match crossterm::event::read().expect("POPUP INSERT").into() {
             Input {
@@ -564,7 +606,7 @@ impl App {
             }
         }
     }
-    pub fn popup_mode_normal(&mut self, textarea: &mut TextArea) {
+    pub fn popup_mode_normal(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
         match crossterm::event::read().expect("POPUP ERROR").into() {
             Input {
                 key: Key::Char('i'),
@@ -582,7 +624,7 @@ impl App {
                 ..
             } => {
                 // TODO parameterize write and close
-                self.popup_write_and_close(textarea);
+                self.popup_write_and_close(textarea, popup);
                 *textarea = TextArea::default();
             }
             Input { key: Key::Down, .. } => self.next(),
@@ -593,25 +635,53 @@ impl App {
             _ => {}
         }
     }
-    pub fn next(&mut self) {}
-    pub fn previous(&mut self) {}
-    pub fn toggle(&mut self) {}
-    pub fn popup_write_and_close(&mut self, textarea: &mut TextArea) {
+    pub fn popup_write_and_close(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
         let content = textarea.lines().join("\n").to_owned();
+        match popup {
+            PopupWindow::AddTodo => {
+                let project_id = match self.projects.current() {
+                    Some(p) => p.id,
+                    None => 0,
+                };
+                write_new_todo(vec![Todo {
+                    id: 0,
+                    parent_id: 0,
+                    project_id: project_id,
+                    todo: content,
+                    is_complete: false,
+                }]);
+
+                self.todos = FilteredListItems::<Todo>::load(None);
+                self.todos.select_filter_state(Some(0), project_id);
+            }
+            PopupWindow::EditDesc => {
+                match self.projects.current_state() {
+                    (Some(idx), Some(p)) => {
+                        update_project_desc(p, content).expect("A");
+                        // reload projects but retain selection
+                        self.projects = TableItems::<Project>::load(None);
+                        self.projects.select_state(Some(idx));
+                    },
+                    _ => (),
+                }
+            },
+            PopupWindow::EditCategory => {},
+            _ => (),
+        }
+        self.close_popup();
     }
+    pub fn toggle(&mut self) {
+        match self.window {
+            Window {popup: PopupWindow::None, base: BaseWindow::Project, ..} 
+            => self.projects.toggle(),
+            Window {popup: PopupWindow::None, base: BaseWindow::Todo, ..} 
+            => self.todos.toggle(),
+            Window {popup: PopupWindow::AddTodo, base: _, ..} 
+            => self.configs.toggle(),
+            _ => {}
+        }
+    }
+
     pub fn delete_todo(&mut self) {}
-    pub fn cycle_focus_next(&mut self) {
-        self.window.base = match self.window.base.clone() {
-            BaseWindow::Project => BaseWindow::Todo,
-            BaseWindow::Todo => BaseWindow::Description,
-            BaseWindow::Description => BaseWindow::Project,
-        }
-    }
-    pub fn cycle_focus_previous(&mut self) {
-        self.window.base = match self.window.base.clone() {
-            BaseWindow::Project => BaseWindow::Description,
-            BaseWindow::Todo => BaseWindow::Project,
-            BaseWindow::Description => BaseWindow::Todo,
-        }
-    }
+    
 }

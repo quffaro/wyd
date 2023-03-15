@@ -42,7 +42,7 @@ const READ_PROJECT: &str = "select id,path,name,desc,cat,status,is_git,last_comm
 pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None => Connection::open(wyd::DATABASE)?,
+        None    => Connection::open(wyd::DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_PROJECT)?;
@@ -75,8 +75,8 @@ pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
 pub fn read_todo(conn: Option<Connection>) -> Result<Vec<Todo>, rusqlite::Error> {
     let conn = match conn {
-        Some(c) => c,
-        None => Connection::open(wyd::DATABASE)?,
+        Some(c)  => c,
+        None     => Connection::open(wyd::DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TODO)?;
@@ -101,7 +101,7 @@ const READ_TMP: &str = "select path, is_selected from tmp_git_config where is_se
 pub fn read_tmp(conn: Option<Connection>) -> Result<Vec<GitConfig>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None => Connection::open(wyd::DATABASE)?,
+        None     => Connection::open(wyd::DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TMP)?;
@@ -118,7 +118,7 @@ pub fn read_tmp(conn: Option<Connection>) -> Result<Vec<GitConfig>, rusqlite::Er
 }
 
 /// WRITE PROJECT TO DB
-const INSERT_PROJECT: &str = "insert or replace into project (
+const INSERT_PROJECT: &str = "insert into project (
     path,
     name, 
     desc, 
@@ -140,6 +140,44 @@ pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
         project.is_git,
         project.last_commit,
     ]);
+
+    Ok(())
+}
+
+const WRITE_NEW_TODO: &str =
+    "insert or replace into todo (
+        parent_id,
+        project_id,
+        todo,
+        is_complete
+) values (?1, ?2, ?3, ?4);";
+pub fn write_new_todo(todos: Vec<Todo>) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    let mut write_stmt = conn.prepare(WRITE_NEW_TODO)?;
+    for x in todos {
+        write_stmt
+            .execute(params![
+                x.parent_id,
+                x.project_id,
+                x.todo.as_str(),
+                match x.is_complete {
+                    true => true,
+                    _ => false,
+                },
+            ])
+            .expect("AAA!");
+    }
+
+    Ok(())
+}
+
+const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
+pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
+        .expect("A");
 
     Ok(())
 }

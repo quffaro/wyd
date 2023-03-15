@@ -1,6 +1,6 @@
 // TODO todos want date column
 use crate::refactor::new_lib::{
-    App, BaseWindow, ListNavigate, PopupWindow, Project, TableItems, WindowStatus,
+    App, BaseWindow, ListNavigate, PopupWindow, WindowStatus, Mode, Window,
 };
 use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX};
 use crossterm::{
@@ -44,6 +44,101 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+    // select
+    app.default_select();
+
+    let mut textarea = TextArea::default();
+
+    loop {
+        terminal.draw(|rect| {
+            ui(rect, &mut app);
+            ui_popup(rect, &mut textarea, &mut app);
+        })?;
+
+        // app.input(&mut textarea);
+        match app.window {
+            Window {popup: PopupWindow::None, base: _, .. } => {
+                if let Event::Key(key) = event::read().expect("Key Error") {
+                    match key.code {
+                        KeyCode::Char('q') => {return Ok(());},
+                        KeyCode::Char('a') => app.add_project_in_dir(),
+                        KeyCode::Char('d') => app.delete_todo(),
+                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc),
+                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory),
+                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo),
+                        KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
+                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                        KeyCode::Enter => app.toggle(),
+                        _ => {}
+                    }
+                }
+            }
+            Window { popup: ref popup, base: _, .. } => match app.window.mode {
+                Mode::Insert => app.popup_mode_insert(&mut textarea),
+                Mode::Normal => app.popup_mode_normal(&mut textarea, popup.clone()),
+            },
+            _ => {}
+        }
+    }
+}
+
+fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
+    let size = rect.size();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints(
+            [
+                // greeting
+                Constraint::Length(03),
+                // table
+                Constraint::Percentage(50),
+                // todo list and description
+                Constraint::Percentage(40),
+            ]
+            .as_ref(),
+        )
+        .split(size);
+
+    let title = Paragraph::new(format!("{:#?} {:#?}", app.window.popup, app.window.mode))
+        .style(Style::default().fg(Color::LightCyan))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White))
+                .title("(pwd)")
+                .border_type(BorderType::Plain),
+        );
+
+    // chunk 0: title
+    rect.render_widget(title, chunks[0]);
+
+    // chunk 1: projects
+    if app.projects.items.len() == 0 {
+        let no_projects = render_no_projects(&app);
+        rect.render_widget(no_projects, chunks[1]);
+    } else {
+        let projects = render_projects(&app);
+        rect.render_stateful_widget(projects, chunks[1], &mut app.projects.state);
+    }
+
+    // chunk 2: todo list
+    // TODO do we need to specify percentages if they are uniform?
+    let todo_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .split(chunks[2]);
+
+    let (left_todo_list, right_todo_search) = render_todo_and_desc(&app);
+    rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
+    rect.render_widget(right_todo_search, todo_chunks[1]);
+}
+
+
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
     let project = app.projects.current();
 
@@ -64,7 +159,14 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 let widget = textarea.widget();
                 rect.render_widget(widget, area);
             }
-            None => (),
+            None => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
+                let msg = Paragraph::new("No project selected".to_owned()); 
+                rect.render_widget(msg, area);
+            },
         },
         PopupWindow::EditDesc => match project {
             Some(p) => {
@@ -89,7 +191,14 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 let widget = textarea.widget();
                 rect.render_widget(widget, area);
             }
-            None => (),
+            None => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
+                let msg = Paragraph::new("No project selected".to_owned()); 
+                rect.render_widget(msg, area);
+            },
         },
         PopupWindow::EditCategory => match project {
             Some(_) => {
@@ -127,76 +236,8 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
     }
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
-    // select
-    app.default_select();
-
-    let mut textarea = TextArea::default();
-
-    loop {
-        terminal.draw(|rect| {
-            ui(rect, &mut app);
-            ui_popup(rect, &mut textarea, &mut app);
-        })?;
-
-        app.input(&mut textarea);
-    }
-}
-
-fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
-    let size = rect.size();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints(
-            [
-                // greeting
-                Constraint::Length(03),
-                // table
-                Constraint::Percentage(50),
-                // todo list and description
-                Constraint::Percentage(40),
-            ]
-            .as_ref(),
-        )
-        .split(size);
-
-    let title = Paragraph::new(format!("{:#?}", app.window.base))
-        .style(Style::default().fg(Color::LightCyan))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .title("(pwd)")
-                .border_type(BorderType::Plain),
-        );
-
-    // chunk 0: title
-    rect.render_widget(title, chunks[0]);
-
-    // chunk 1: projects
-    if app.projects.items.len() == 0 {
-        let no_projects = render_no_projects(&app);
-        rect.render_widget(no_projects, chunks[1]);
-    } else {
-        let projects = render_projects(&app);
-        rect.render_stateful_widget(projects, chunks[1], &mut app.projects.state);
-    }
-
-    // chunk 2: todo list
-    // TODO do we need to specify percentages if they are uniform?
-    let todo_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(chunks[2]);
-
-    let (left_todo_list, right_todo_search) = render_todo_and_desc(&app);
-    rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
-    rect.render_widget(right_todo_search, todo_chunks[1]);
-}
-
 fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
-    let msg = "\n\n\n\n\n\n\n\n\n\n(press `p` to search for git configs)".to_owned();
+    let msg = "\n\n\n\n\n\n\n(press `p` to search for git configs)".to_owned();
     let no_projects = Paragraph::new(msg)
         .style(
             Style::default()
@@ -243,14 +284,17 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         })
         .collect();
 
-    let color = app.window.base_focus_color(BaseWindow::Project);
     let projects = Table::new(rows)
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(color))
+                .style(Style::default().fg(if app.window.base == BaseWindow::Project {
+                    Color::Yellow
+                } else {
+                    Color::White
+                }))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -271,7 +315,70 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
     projects
 }
 
-fn render_config_paths<'a>(app: &App) -> Table<'a> {
+
+fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
+    let todo_block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(if app.window.base == BaseWindow::Todo {
+            Color::Yellow
+        } else {
+            Color::White
+        }))
+        .title("(todo)")
+        .border_type(BorderType::Plain);
+
+    let todo_items: Vec<ListItem> = app
+        .todos
+        .filtered
+        .iter()
+        .map(|t| {
+            if t.is_complete {
+                ListItem::new(format!("[x] {}", t.todo.clone()))
+            } else {
+                ListItem::new(format!("[ ] {}", t.todo.clone()))
+            }
+        })
+        .collect();
+
+    let left = List::new(todo_items).block(todo_block).highlight_style(
+        Style::default()
+            .bg(if app.window.base == BaseWindow::Todo {
+                Color::Yellow
+            } else {
+                Color::White
+            })
+            .fg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    let project_desc = match app.projects.get_state_selected() {
+        Some(i) => match app.projects.items.iter().nth(i) {
+            Some(p) => p.desc.to_owned(),
+            None => "".to_owned(),
+        },
+        None => "".to_owned(),
+    };
+
+    let right = Paragraph::new(project_desc)
+        .block(
+            Block::default()
+                .title("(description)")
+                .borders(Borders::ALL),
+        )
+        .style(Style::default().fg(if app.window.base == BaseWindow::Description {
+            Color::Yellow
+        } else {
+            Color::White
+        })
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false });
+
+    (left, right)
+}
+
+
+fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
         .configs
         .items
@@ -314,56 +421,6 @@ fn render_config_paths<'a>(app: &App) -> Table<'a> {
         .highlight_symbol(HIGHLIGHT_SYMBOL);
 
     paths
-}
-
-fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
-    let todo_block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(app.window.mode_color()))
-        .title("(todo)")
-        .border_type(BorderType::Plain);
-
-    let todo_items: Vec<ListItem> = app
-        .todos
-        .filtered
-        .iter()
-        .map(|t| {
-            if t.is_complete {
-                ListItem::new(format!("[x] {}", t.todo.clone()))
-            } else {
-                ListItem::new(format!("[ ] {}", t.todo.clone()))
-            }
-        })
-        .collect();
-
-    let left_color = app.window.base_focus_color(BaseWindow::Todo);
-    let left = List::new(todo_items).block(todo_block).highlight_style(
-        Style::default()
-            .bg(left_color)
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let project_desc = match app.projects.get_state_selected() {
-        Some(i) => match app.projects.items.iter().nth(i) {
-            Some(p) => p.desc.to_owned(),
-            None => "".to_owned(),
-        },
-        None => "".to_owned(),
-    };
-
-    let right_color = app.window.base_focus_color(BaseWindow::Description);
-    let right = Paragraph::new(project_desc)
-        .block(
-            Block::default()
-                .title("(description)")
-                .borders(Borders::ALL),
-        )
-        .style(Style::default().fg(right_color).bg(Color::Black))
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: false });
-
-    (left, right)
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
