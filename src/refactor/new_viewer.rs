@@ -1,9 +1,14 @@
 // TODO todos want date column
+use crate::refactor::new_lib::{
+    App, BaseWindow, ListNavigate, PopupWindow, Project, TableItems, WindowStatus,
+};
+use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use std::io;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -14,8 +19,6 @@ use tui::{
     Frame, Terminal,
 };
 use tui_textarea::{Input, Key, TextArea};
-use std::io;
-use crate::refactor::new_lib::{WindowStatus, BaseWindow, PopupWindow, HIGHLIGHT_SYMBOL, App};
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     // setup terminal
@@ -42,11 +45,10 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
-
     let size = rect.size();
-    let area = centered_rect(percent_x: 40, percent_y: 40, r: size);
+    let area = centered_rect(40, 40, size);
     rect.render_widget(Clear, area);
-    
+
     let project = app.projects.current();
 
     // POPUP
@@ -82,7 +84,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 );
                 let widget = textarea.widget();
                 rect.render_widget(widget, area);
-            },
+            }
             None => (),
         },
         PopupWindow::EditCategory => match project {
@@ -102,7 +104,11 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
 
                 let category_list = List::new(categories)
                     .block(category_block)
-                    .highlight_style(Style::default().fg(app.window.mode_color()).add_modifier(Modifier::BOLD))
+                    .highlight_style(
+                        Style::default()
+                            .fg(app.window.mode_color())
+                            .add_modifier(Modifier::BOLD),
+                    )
                     .highlight_symbol(HIGHLIGHT_SYMBOL);
 
                 rect.render_stateful_widget(category_list, area, &mut app.categories.state);
@@ -114,8 +120,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
-
-    // select 
+    // select
     app.default_select();
 
     let mut textarea = TextArea::default();
@@ -126,9 +131,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             ui_popup(rect, &mut textarea, &mut app);
         })?;
 
-        app.input(textarea);
+        app.input(&mut textarea);
     }
-}   
+}
 
 fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     let size = rect.size();
@@ -180,7 +185,6 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     let (left_todo_list, right_todo_search) = render_todo_and_desc(&app);
     rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
     rect.render_widget(right_todo_search, todo_chunks[1]);
-
 }
 
 fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
@@ -196,11 +200,13 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
             Block::default()
                 .borders(Borders::ALL)
                 // TODO implement a style rule
-                .style(Style::default().fg(if app.window.base == BaseWindow::Project {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }))
+                .style(
+                    Style::default().fg(if app.window.base == BaseWindow::Project {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }),
+                )
                 .title("(projects)")
                 .border_type(BorderType::Plain),
         );
@@ -229,13 +235,14 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         })
         .collect();
 
+    let color = app.window.base_focus_color(BaseWindow::Project);
     let projects = Table::new(rows)
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(app.window.base_focus_color(BaseWindow::Project)))
+                .style(Style::default().fg(color))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))

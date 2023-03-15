@@ -1,22 +1,26 @@
-use strum_macros::{EnumIter, EnumString};
-use strum::IntoEnumIterator;
-use tui::{style::Color, widgets::{List, Table}};
-use std::{fmt, env};
-use tui::widgets::{ListState, TableState};
+use crate::refactor::new_sql::write_project;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use tui_textarea::{Input, Key, TextArea};
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
+use std::{env, fmt};
+use strum::IntoEnumIterator;
+use strum_macros::{EnumIter, EnumString};
+use tui::widgets::{ListState, TableState};
+use tui::{
+    style::Color,
+    widgets::{List, Table},
+};
+use tui_textarea::{Input, Key, TextArea};
 
 /// SQL
 /// // TODO needs ot be dynamic
-pub const DATABASE: &str                = "projects.db";
+pub const DATABASE: &str = "projects.db";
 pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/"; // CUFFARO IS NOT GUARANTEED!
-pub const CONFIG_PATH_SUFFIX: &str      = "**/.git/config";
-pub const CONFIG_SEARCH_PREFIX: &str    = "~/Documents/";
+pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
+pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 
 /// UI
 pub const HIGHLIGHT_SYMBOL: &str = ">> ";
@@ -49,20 +53,20 @@ pub trait ListNavigate {
     fn select_state<'a>(&'a mut self, idx: Option<usize>);
     fn next(&mut self) {
         match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {},
+            (_, 0) => {}
             (Some(i), l) => {
                 if i >= l - 1 {
                     self.select_state(Some(0))
                 } else {
                     self.select_state(Some(i + 1))
                 };
-            },
+            }
             (None, _) => self.select_state(Some(0)),
         }
     }
     fn previous(&mut self) {
         match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {},
+            (_, 0) => {}
             (Some(0), l) => self.select_state(Some(l - 1)),
             (Some(i), _) => self.select_state(Some(i + 1)),
             (None, _) => self.select_state(Some(0)),
@@ -138,20 +142,20 @@ impl<T> ListNavigate for TableItems<T> {
     }
     fn next(&mut self) {
         match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {},
+            (_, 0) => {}
             (Some(i), l) => {
                 if i >= l - 1 {
                     self.select_state(Some(0))
                 } else {
                     self.select_state(Some(i + 1))
                 };
-            },
+            }
             (None, _) => self.select_state(Some(0)),
         }
     }
     fn previous(&mut self) {
         match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {},
+            (_, 0) => {}
             (Some(0), l) => self.select_state(Some(l - 1)),
             (Some(i), _) => self.select_state(Some(i + 1)),
             (None, _) => self.select_state(Some(0)),
@@ -223,10 +227,10 @@ impl Project {
             last_commit: "N/A".to_owned(),
         }
     }
-    // TODO this is 
+    // TODO this is
     pub fn cycle_status(&mut self) {
         self.status = match self.status {
-            ProjectStatus::Stable   => ProjectStatus::Unstable,
+            ProjectStatus::Stable => ProjectStatus::Unstable,
             ProjectStatus::Unstable => ProjectStatus::Stable,
         };
         // TODO we need to write this
@@ -235,7 +239,7 @@ impl Project {
 }
 
 impl TableItems<Project> {
-    pub fn new() -> TableItems<Project> {
+    pub fn load() -> TableItems<Project> {
         TableItems {
             items: Project::load(),
             state: TableState::default(),
@@ -268,9 +272,10 @@ pub struct Todo {
 }
 
 impl FilteredListItems<Todo> {
-    pub fn new() -> FilteredListItems<Todo> {
+    pub fn load() -> FilteredListItems<Todo> {
         FilteredListItems {
-            items: read_todo().expect("AA"),
+            items: vec![],
+            // read_todo().expect("AA"),
             filtered: vec![],
             state: ListState::default(),
         }
@@ -286,7 +291,7 @@ impl FilteredListItems<Todo> {
         for i in 0..self.filtered.len() {
             if i == selected {
                 self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                update_todo(&self.filtered[i]).expect("msg");
+                // update_todo(&self.filtered[i]).expect("msg");
             } else {
                 continue;
             }
@@ -322,7 +327,7 @@ impl fmt::Display for Mode {
     }
 }
 
-#[derive(PartialEq, Eq, EnumIter, EnumString)]
+#[derive(PartialEq, Eq, Clone, EnumIter, EnumString)]
 pub enum BaseWindow {
     Project,
     Todo,
@@ -332,8 +337,8 @@ pub enum BaseWindow {
 impl fmt::Display for BaseWindow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Self::Project     => write!(f, "PROJECTS"),
-            Self::Todo        => write!(f, "TODO"),
+            Self::Project => write!(f, "PROJECTS"),
+            Self::Todo => write!(f, "TODO"),
             Self::Description => write!(f, "DESC"),
         }
     }
@@ -358,7 +363,7 @@ pub enum PopupWindow {
     SearchGitConfig,
     AddTodo,
     EditCategory,
-    EditDesc
+    EditDesc,
 }
 
 impl ListItems<PopupWindow> {
@@ -379,7 +384,7 @@ pub enum WindowStatus {
     NotLoaded,
 }
 
-struct Window {
+pub struct Window {
     pub base: BaseWindow,
     pub popup: PopupWindow,
     pub status: WindowStatus,
@@ -395,16 +400,20 @@ impl Window {
             mode: Mode::Insert,
         }
     }
-    pub fn mode_color(&mut self) -> Color {
+    pub fn mode_color(&self) -> Color {
         match self.mode {
             Mode::Insert => Color::Yellow,
             Mode::Normal => Color::Green,
         }
     }
-    pub fn base_focus_color(&mut self, window: BaseWindow) -> Color {
+    pub fn base_focus_color(&self, window: BaseWindow) -> Color {
         match self {
-            Window { popup: PopupWindow::None, base: window, .. } => Color::Yellow,
-            _ => Color::White
+            Window {
+                popup: PopupWindow::None,
+                base: window,
+                ..
+            } => Color::Yellow,
+            _ => Color::White,
         }
     }
     fn to_project() -> Window {
@@ -455,11 +464,11 @@ pub struct App {
 impl App {
     fn new() -> App {
         App {
-            pub message: "hiii".to_owned(),
+            message: "hiii".to_owned(),
             window: Window::new(),
-            configs: TableItems::<GitConfig>::new(),
-            projects: TableItems::<Project>::new(),
-            todos: FilteredListItems::<Todo>::new(),
+            configs: TableItems::<GitConfig>::load(),
+            projects: TableItems::<Project>::load(),
+            todos: FilteredListItems::<Todo>::load(),
             categories: ListItems::<Category>::new(),
         }
     }
@@ -480,7 +489,26 @@ impl App {
     }
     pub fn add_project_in_dir(&mut self) {
         // write_project(Project::new_in_pwd()); // SQL
-        self.projects = TableItems::<Project>::new();
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => {
+                write_project(Project {
+                    id: 0,
+                    path: env::current_dir().unwrap().display().to_string(),
+                    name: "".to_owned(),
+                    desc: "".to_owned(),
+                    category: Category::Unknown,
+                    status: ProjectStatus::Unstable,
+                    is_git: false,
+                    last_commit: "N/A".to_owned(),
+                });
+                self.projects = TableItems::<Project>::load();
+            }
+            _ => {}
+        }
     }
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow) {
@@ -490,22 +518,29 @@ impl App {
         self.window.popup = PopupWindow::None;
     }
     /// INPUT
-    pub fn input(&mut self, textarea: TextArea) {
+    pub fn input(&mut self, textarea: &mut TextArea) {
         match self.window {
-            Window { popup: PopupWindow::None, base: _, .. } => 
-            if let Event::Key(key) = event::read().expect("Key Error") {
-                match key.code {
-                    KeyCode::Char('d')                  => self.delete_todo(),
-                    KeyCode::Char('i')                  => self.popup_add_task(),
-                    KeyCode::Char(';') | KeyCode::Right => self.cycle_focus_next(),
-                    KeyCode::Char('j') | KeyCode::Left  => self.cycle_focus_previous(),
-                    KeyCode::Char('l') | KeyCode::Down  => self.next(),
-                    KeyCode::Char('k') | KeyCode::Up    => self.previous(),
-                    KeyCode::Enter                      => self.toggle(),
-                    _                                   => {}
+            Window {
+                popup: PopupWindow::None,
+                base: _,
+                ..
+            } => {
+                if let Event::Key(key) = event::read().expect("Key Error") {
+                    match key.code {
+                        KeyCode::Char('d') => self.delete_todo(),
+                        KeyCode::Char('i') => self.popup(PopupWindow::AddTodo),
+                        KeyCode::Char(';') | KeyCode::Right => self.cycle_focus_next(),
+                        KeyCode::Char('j') | KeyCode::Left => self.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down => self.next(),
+                        KeyCode::Char('k') | KeyCode::Up => self.previous(),
+                        KeyCode::Enter => self.toggle(),
+                        _ => {}
+                    }
                 }
             }
-            Window { popup: _, base: _, .. } => match self.window.mode {
+            Window {
+                popup: _, base: _, ..
+            } => match self.window.mode {
                 Mode::Insert => self.popup_mode_insert(textarea),
                 Mode::Normal => self.popup_mode_normal(textarea),
             },
@@ -513,37 +548,70 @@ impl App {
         }
     }
     // TODO result
-    pub fn popup_mode_insert(&mut self, textarea: TextArea) {
-        match crossterm::event::read()?.into() {
-            Input { key: Key::Char('c'), ctrl: true, .. } | 
-            Input { key: Key::Esc,       .. } => self.window.mode = Mode::Normal,
-            Input { key: Key::Enter, .. }     => {}
-            input                             => { textarea.input(input); }
+    pub fn popup_mode_insert(&mut self, textarea: &mut TextArea) {
+        match crossterm::event::read().expect("POPUP INSERT").into() {
+            Input {
+                key: Key::Char('c'),
+                ctrl: true,
+                ..
+            }
+            | Input { key: Key::Esc, .. } => self.window.mode = Mode::Normal,
+            Input {
+                key: Key::Enter, ..
+            } => {}
+            input => {
+                textarea.input(input);
+            }
         }
     }
-    pub fn popup_mode_normal(&mut self, textarea: TextArea) {
-        match crossterm::event::read()?.into() {
-            Input { key: Key::Char('i'), .. } => self.window.mode = Mode::Insert,
-            Input { key: Key::Char('q'), .. } => {
+    pub fn popup_mode_normal(&mut self, textarea: &mut TextArea) {
+        match crossterm::event::read().expect("POPUP ERROR").into() {
+            Input {
+                key: Key::Char('i'),
+                ..
+            } => self.window.mode = Mode::Insert,
+            Input {
+                key: Key::Char('q'),
+                ..
+            } => {
                 self.close_popup();
-                textarea = TextArea::default();
+                *textarea = TextArea::default();
             }
-            Input { key: Key::Char('w'), .. } => {
+            Input {
+                key: Key::Char('w'),
+                ..
+            } => {
                 // TODO parameterize write and close
                 self.popup_write_and_close(textarea);
-                textarea = TextArea::default();
+                *textarea = TextArea::default();
             }
-            Input { key: Key::Down,  .. } => self.next(),
-            Input { key: Key::Up,    .. } => self.previous(),
-            Input { key: Key::Enter, .. } => self.toggle(),
-            _                             => {}
+            Input { key: Key::Down, .. } => self.next(),
+            Input { key: Key::Up, .. } => self.previous(),
+            Input {
+                key: Key::Enter, ..
+            } => self.toggle(),
+            _ => {}
         }
     }
     pub fn next(&mut self) {}
     pub fn previous(&mut self) {}
     pub fn toggle(&mut self) {}
-    pub fn popup_write_and_close(&mut self, textarea: TextArea) {
+    pub fn popup_write_and_close(&mut self, textarea: &mut TextArea) {
         let content = textarea.lines().join("\n").to_owned();
     }
+    pub fn delete_todo(&mut self) {}
+    pub fn cycle_focus_next(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Todo,
+            BaseWindow::Todo => BaseWindow::Description,
+            BaseWindow::Description => BaseWindow::Project,
+        }
+    }
+    pub fn cycle_focus_previous(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Description,
+            BaseWindow::Todo => BaseWindow::Project,
+            BaseWindow::Description => BaseWindow::Todo,
+        }
+    }
 }
-
