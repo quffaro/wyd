@@ -45,16 +45,16 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
-    let size = rect.size();
-    let area = centered_rect(40, 40, size);
-    rect.render_widget(Clear, area);
-
     let project = app.projects.current();
 
     // POPUP
     match app.window.popup {
         PopupWindow::AddTodo => match project {
             Some(p) => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
                 textarea.set_block(
                     Block::default()
                         .borders(Borders::ALL)
@@ -68,6 +68,10 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
         },
         PopupWindow::EditDesc => match project {
             Some(p) => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
                 match app.window.status {
                     WindowStatus::NotLoaded => {
                         textarea.insert_str(p.desc.as_str());
@@ -89,6 +93,10 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
         },
         PopupWindow::EditCategory => match project {
             Some(_) => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
                 let category_block = Block::default()
                     .borders(Borders::ALL)
                     .style(Style::default().fg(app.window.mode_color()))
@@ -153,7 +161,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{:#?}", app.message))
+    let title = Paragraph::new(format!("{:#?}", app.window.base))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -328,9 +336,10 @@ fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         })
         .collect();
 
+    let left_color = app.window.base_focus_color(BaseWindow::Todo);
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .bg(app.window.base_focus_color(BaseWindow::Todo))
+            .bg(left_color)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
@@ -343,17 +352,14 @@ fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         None => "".to_owned(),
     };
 
+    let right_color = app.window.base_focus_color(BaseWindow::Description);
     let right = Paragraph::new(project_desc)
         .block(
             Block::default()
                 .title("(description)")
                 .borders(Borders::ALL),
         )
-        .style(
-            Style::default()
-                .fg(app.window.base_focus_color(BaseWindow::Description))
-                .bg(Color::Black),
-        )
+        .style(Style::default().fg(right_color).bg(Color::Black))
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false });
 

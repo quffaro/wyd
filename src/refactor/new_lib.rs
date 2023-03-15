@@ -327,7 +327,7 @@ impl fmt::Display for Mode {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, EnumIter, EnumString)]
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
 pub enum BaseWindow {
     Project,
     Todo,
