@@ -62,18 +62,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             Window {popup: PopupWindow::None, base: _, .. } => {
                 if let Event::Key(key) = event::read().expect("Key Error") {
                     match key.code {
-                        KeyCode::Char('q') => {return Ok(());},
-                        KeyCode::Char('a') => app.add_project_in_dir(),
-                        KeyCode::Char('d') => app.delete_todo(),
-                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc),
-                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory),
-                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo),
+                        KeyCode::Char('q')                  => {return Ok(());},
+                        KeyCode::Char('a')                  => app.add_project_in_dir(),
+                        KeyCode::Char('d')                  => app.delete_todo(),
+                        KeyCode::Char('e')                  => app.popup(PopupWindow::EditDesc),
+                        KeyCode::Char('r')                  => app.popup(PopupWindow::EditCategory),
+                        KeyCode::Char('t')                  => app.popup(PopupWindow::AddTodo),
                         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down => app.next(),
-                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                        KeyCode::Enter => app.toggle(),
-                        _ => {}
+                        KeyCode::Char('j') | KeyCode::Left  => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down  => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up    => app.previous(),
+                        KeyCode::Enter                      => app.toggle(),
+                        _                                   => {}
                     }
                 }
             }

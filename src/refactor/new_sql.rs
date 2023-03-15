@@ -1,5 +1,5 @@
 use crate::refactor::new_lib::DATABASE;
-use crate::refactor::new_lib::{GitConfig, Project, Todo};
+use crate::refactor::new_lib::{Category, GitConfig, Project, Todo};
 use rusqlite::{params, Connection, Result};
 
 /// CREATE TABLES
@@ -177,6 +177,17 @@ pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqli
     let conn = Connection::open(DATABASE)?;
 
     conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
+        .expect("A");
+
+    Ok(())
+}
+
+
+const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
+pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", project.category), project.id))
         .expect("A");
 
     Ok(())
