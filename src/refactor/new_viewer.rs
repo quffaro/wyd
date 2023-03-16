@@ -1,6 +1,6 @@
 // TODO todos want date column
 use crate::refactor::new_lib::{
-    App, BaseWindow, ListNavigate, PopupWindow, WindowStatus, Mode, Window,
+    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
 };
 use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX};
 use crossterm::{
@@ -44,7 +44,6 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
     app.default_select();
@@ -59,25 +58,35 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
         // app.input(&mut textarea);
         match app.window {
-            Window {popup: PopupWindow::None, base: _, .. } => {
+            Window {
+                popup: PopupWindow::None,
+                base: _,
+                ..
+            } => {
                 if let Event::Key(key) = event::read().expect("Key Error") {
                     match key.code {
-                        KeyCode::Char('q')                  => {return Ok(());},
-                        KeyCode::Char('a')                  => app.add_project_in_dir(),
-                        KeyCode::Char('d')                  => app.delete_todo(),
-                        KeyCode::Char('e')                  => app.popup(PopupWindow::EditDesc),
-                        KeyCode::Char('r')                  => app.popup(PopupWindow::EditCategory),
-                        KeyCode::Char('t')                  => app.popup(PopupWindow::AddTodo),
+                        KeyCode::Char('q') => {
+                            return Ok(());
+                        }
+                        KeyCode::Char('a') => app.add_project_in_dir(),
+                        KeyCode::Char('d') => app.delete_todo(),
+                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc),
+                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory),
+                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo),
                         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left  => app.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down  => app.next(),
-                        KeyCode::Char('k') | KeyCode::Up    => app.previous(),
-                        KeyCode::Enter                      => app.toggle(),
-                        _                                   => {}
+                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                        KeyCode::Enter => app.toggle(),
+                        _ => {}
                     }
                 }
             }
-            Window { popup: ref popup, base: _, .. } => match app.window.mode {
+            Window {
+                popup: ref popup,
+                base: _,
+                ..
+            } => match app.window.mode {
                 Mode::Insert => app.popup_mode_insert(&mut textarea),
                 Mode::Normal => app.popup_mode_normal(&mut textarea, popup.clone()),
             },
@@ -138,7 +147,6 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     rect.render_widget(right_todo_search, todo_chunks[1]);
 }
 
-
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
     let project = app.projects.current();
 
@@ -164,9 +172,9 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 let area = centered_rect(40, 40, size);
                 rect.render_widget(Clear, area);
 
-                let msg = Paragraph::new("No project selected".to_owned()); 
+                let msg = Paragraph::new("No project selected".to_owned());
                 rect.render_widget(msg, area);
-            },
+            }
         },
         PopupWindow::EditDesc => match project {
             Some(p) => {
@@ -196,9 +204,9 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 let area = centered_rect(40, 40, size);
                 rect.render_widget(Clear, area);
 
-                let msg = Paragraph::new("No project selected".to_owned()); 
+                let msg = Paragraph::new("No project selected".to_owned());
                 rect.render_widget(msg, area);
-            },
+            }
         },
         PopupWindow::EditCategory => match project {
             Some(_) => {
@@ -290,11 +298,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.window.base == BaseWindow::Project {
-                    Color::Yellow
-                } else {
-                    Color::White
-                }))
+                .style(
+                    Style::default().fg(if app.window.base == BaseWindow::Project {
+                        Color::Yellow
+                    } else {
+                        Color::Gray
+                    }),
+                )
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -306,7 +316,11 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(app.window.base_focus_color(BaseWindow::Project))
+                .bg(if app.window.base == BaseWindow::Project {
+                    Color::Yellow
+                } else {
+                    Color::White
+                })
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
@@ -314,7 +328,6 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
 
     projects
 }
-
 
 fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     let todo_block = Block::default()
@@ -365,18 +378,18 @@ fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
                 .title("(description)")
                 .borders(Borders::ALL),
         )
-        .style(Style::default().fg(if app.window.base == BaseWindow::Description {
-            Color::Yellow
-        } else {
-            Color::White
-        })
+        .style(
+            Style::default().fg(if app.window.base == BaseWindow::Description {
+                Color::Yellow
+            } else {
+                Color::White
+            }),
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false });
 
     (left, right)
 }
-
 
 fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
