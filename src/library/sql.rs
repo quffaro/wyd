@@ -1,10 +1,6 @@
-use crate::refactor::new_lib::DATABASE;
+use crate::library::code::{fetch_config_files, DATABASE, ProjectStatus, Category, GitConfig, Project, Todo};
 use regex::Regex;
-
-use crate::refactor::new_lib::{ProjectStatus, Category, GitConfig, Project, Todo};
 use rusqlite::{params, Connection, Result};
-
-use super::new_lib::fetch_config_files;
 
 /// CREATE TABLES
 const CREATE_CONFIG: &str = "CREATE TABLE IF NOT EXISTS tmp_git_config (
@@ -46,7 +42,7 @@ const READ_PROJECT: &str = "select id,path,name,desc,cat,status,is_git,last_comm
 pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None    => Connection::open(wyd::DATABASE)?,
+        None    => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_PROJECT)?;
@@ -80,7 +76,7 @@ const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from to
 pub fn read_todo(conn: Option<Connection>) -> Result<Vec<Todo>, rusqlite::Error> {
     let conn = match conn {
         Some(c)  => c,
-        None     => Connection::open(wyd::DATABASE)?,
+        None     => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TODO)?;
@@ -105,7 +101,7 @@ const READ_TMP: &str = "select path, is_selected from tmp_git_config where is_se
 pub fn read_tmp(conn: Option<Connection>) -> Result<Vec<GitConfig>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None     => Connection::open(wyd::DATABASE)?,
+        None     => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TMP)?;
@@ -267,7 +263,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
 }
 
 ///
-fn regex_repo(path: String) -> String {
+pub fn regex_repo(path: String) -> String {
     let re = Regex::new(r"(.+)/([^/]+)").expect("AAAA");
     let caps = re.captures(&path).unwrap();
 

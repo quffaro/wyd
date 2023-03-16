@@ -1,15 +1,11 @@
-use crate::refactor::new_sql::{
+use crate::library::sql::{
     initialize_db, read_project, read_todo, update_project_category, update_project_desc,
-    write_new_todo, write_project, read_tmp, update_tmp, write_tmp_to_project,
+    write_new_todo, write_project, read_tmp, update_tmp, write_tmp_to_project, regex_repo
+    // TODO move regex repo to another folder
 };
 use glob::glob;
 use shellexpand;
 use std::path::PathBuf;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
     Connection,
@@ -17,10 +13,9 @@ use rusqlite::{
 use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
-use tui::widgets::{ListItem, ListState, TableState};
+use tui::widgets::{ListState, TableState};
 use tui::{
     style::Color,
-    widgets::{List, Table},
 };
 use tui_textarea::{Input, Key, TextArea};
 
@@ -190,11 +185,13 @@ impl App {
                 base: BaseWindow::Project,
                 ..
             } => {
+                let path = env::current_dir().unwrap().display().to_string();
+                let name = regex_repo(path.clone());
                 write_project(Project {
                     id: 0,
-                    path: env::current_dir().unwrap().display().to_string(),
-                    name: "".to_owned(),
-                    desc: "".to_owned(),
+                    path: path,
+                    name: name,
+                    desc: "N/A".to_owned(),
                     category: Category::Unknown,
                     status: ProjectStatus::Unstable,
                     is_git: false,

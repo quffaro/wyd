@@ -1,17 +1,17 @@
 // TODO todos want date column
-use crate::refactor::new_lib::{
-    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
+use crate::library::code::{
+    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
+    SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER,
 };
-use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER};
-use crate::refactor::new_sql::{init_tmp_git_config};
+use crate::library::sql::init_tmp_git_config;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use dirs::home_dir;
 use std::env::current_dir;
 use std::io;
-use dirs::home_dir;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -52,10 +52,8 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
     app.default_select();
-    
-    thread::spawn(|| {
-        init_tmp_git_config()
-    });
+
+    thread::spawn(|| init_tmp_git_config());
 
     let mut textarea = TextArea::default();
 
@@ -80,22 +78,24 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         KeyCode::Char('a') => app.add_project_in_dir(),
                         KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('e') => app.popup(PopupWindow::EditDesc, None),
-                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory, Some(Mode::Normal)),
+                        KeyCode::Char('r') => {
+                            app.popup(PopupWindow::EditCategory, Some(Mode::Normal))
+                        }
                         KeyCode::Char('t') => app.popup(PopupWindow::AddTodo, None),
-                        KeyCode::Char('p') => app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal)),
+                        KeyCode::Char('p') => {
+                            app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal))
+                        }
                         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left  => app.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down  => app.next(),
-                        KeyCode::Char('k') | KeyCode::Up    => app.previous(),
-                        KeyCode::Enter                      => app.toggle(),
+                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                        KeyCode::Enter => app.toggle(),
                         _ => {}
                     }
                 }
             }
             Window {
-                ref popup,
-                base: _,
-                ..
+                ref popup, base: _, ..
             } => match app.window.mode {
                 Mode::Insert => app.popup_mode_insert(&mut textarea),
                 Mode::Normal => app.popup_mode_normal(&mut textarea, popup.clone()),
@@ -123,7 +123,11 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let pwd = current_dir().unwrap().into_os_string().into_string().unwrap();
+    let pwd = current_dir()
+        .unwrap()
+        .into_os_string()
+        .into_string()
+        .unwrap();
     let title = Paragraph::new(pwd)
         .style(Style::default().fg(Color::LightCyan))
         .block(
@@ -251,18 +255,17 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
             }
             None => (),
         },
-        PopupWindow::SearchGitConfig => { 
-                // TODO performance 
-                
+        PopupWindow::SearchGitConfig => {
+            // TODO performance
 
-                let size = rect.size();
-                let area = centered_rect(80, 40, size);
-                rect.render_widget(Clear, area); //this clears out the background
+            let size = rect.size();
+            let area = centered_rect(80, 40, size);
+            rect.render_widget(Clear, area); //this clears out the background
 
-                // which popup is decided here
-                let popup = render_popup_config_paths(&app);
-                rect.render_stateful_widget(popup, area, &mut app.configs.state);
-            }
+            // which popup is decided here
+            let popup = render_popup_config_paths(&app);
+            rect.render_stateful_widget(popup, area, &mut app.configs.state);
+        }
         _ => (),
     }
 }
@@ -296,7 +299,11 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
 
 // render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
-    let home_dir = format!("{}{}", home_dir().unwrap().into_os_string().into_string().unwrap(), SUB_HOME_FOLDER);
+    let home_dir = format!(
+        "{}{}",
+        home_dir().unwrap().into_os_string().into_string().unwrap(),
+        SUB_HOME_FOLDER
+    );
     let rows: Vec<Row> = app
         .projects
         .items
@@ -416,15 +423,23 @@ fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
 }
 
 fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
+    // TODO simplify
+    let home_dir = format!(
+        "{}{}",
+        home_dir().unwrap().into_os_string().into_string().unwrap(),
+        SUB_HOME_FOLDER
+    );
     let rows: Vec<Row> = app
         .configs
         .items
         .iter()
         .map(|p| {
+            let y = p.path.replace(&home_dir, ".../").replace("/.git.config","").clone();
             Row::new(vec![
-                // TODO remove substring
-                Cell::from(p.path.replace(SEARCH_DIRECTORY_PREFIX, "...").clone()),
-                Cell::from(p.is_selected.to_string().clone()),
+                match p.is_selected {
+                    true  => Cell::from(format!("[x] {}", y)),
+                    false => Cell::from(format!("[ ] {}", y))
+                }
             ])
         })
         .collect();
@@ -449,7 +464,7 @@ fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
                 )
                 .border_type(BorderType::Plain),
         )
-        .widths(&[Constraint::Length(50), Constraint::Length(20)])
+        .widths(&[Constraint::Percentage(100)])
         .highlight_style(
             Style::default()
                 .bg(Color::Black)

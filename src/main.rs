@@ -2,7 +2,7 @@
 // initialize db from schema script
 // add category list
 // add priority to project
-mod refactor;
+mod library;
 fn main() {
-    refactor::new_viewer::viewer();
+    library::viewer::viewer();
 }
