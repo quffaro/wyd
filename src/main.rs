@@ -2,7 +2,7 @@
 // initialize db from schema script
 // add category list
 // add priority to project
-mod other;
+mod library;
 fn main() {
-    other::viewer::viewer().unwrap();
+    library::viewer::viewer();
 }

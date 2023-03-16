@@ -498,7 +498,6 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                         )
                         .highlight_symbol(">>");
 
-                    rect.render_stateful_widget(category_list, area, &mut app.categories.state);
                 }
                 None => (),
             },
