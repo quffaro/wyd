@@ -1,7 +1,10 @@
 use crate::refactor::new_sql::{
     initialize_db, read_project, read_todo, update_project_category, update_project_desc,
-    write_new_todo, write_project,
+    write_new_todo, write_project, read_tmp, write_tmp,
 };
+use glob::glob;
+use shellexpand;
+use std::path::PathBuf;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -33,448 +36,23 @@ pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 /// UI
 pub const HIGHLIGHT_SYMBOL: &str = ">> ";
 
-#[derive(PartialEq, Eq, Debug, Clone, EnumString)]
-pub enum ProjectStatus {
-    Stable,
-    Unstable,
-}
+pub fn fetch_config_files() -> Vec<String> {
+    let expanded_path = shellexpand::tilde(CONFIG_SEARCH_PREFIX);
+    let pattern: PathBuf = [&expanded_path, CONFIG_PATH_SUFFIX].iter().collect();
 
-impl fmt::Display for ProjectStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-// TODO refactor to include-sql
-impl FromSql for ProjectStatus {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<ProjectStatus>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
+    let tmp: Vec<String> = glob(pattern.to_str().unwrap())
+        .expect("expectation!!")
+        .filter_map(|x| x.ok())
+        .map(|x| {
+            x.into_os_string()
+                .into_string()
+                .unwrap()
+                .replace(CONFIG_PATH_SUFFIX, "")
+        })
+        .collect();
 
-/// STRUCTS
-pub trait ListNavigate {
-    fn get_items_len<'a>(&'a self) -> usize;
-    fn get_state_selected<'a>(&'a self) -> Option<usize>;
-    fn select_state<'a>(&'a mut self, idx: Option<usize>);
-    fn next(&mut self) {
-        match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {}
-            (Some(i), l) => {
-                if i >= l - 1 {
-                    self.select_state(Some(0))
-                } else {
-                    self.select_state(Some(i + 1))
-                };
-            }
-            (None, _) => self.select_state(Some(0)),
-        }
-    }
-    fn previous(&mut self) {
-        match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {}
-            (Some(0), l) => self.select_state(Some(l - 1)),
-            (Some(i), _) => self.select_state(Some(i - 1)),
-            (None, _) => self.select_state(Some(0)),
-        }
-    }
-    fn unselect(&mut self) {
-        self.select_state(None);
-    }
+    tmp
 }
-
-#[derive(Clone, Debug)]
-pub struct ListItems<T> {
-    pub items: Vec<T>,
-    pub state: ListState,
-}
-
-impl<T> ListNavigate for ListItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-// TODO
-impl ListItems<Category> {
-    pub fn new() -> ListItems<Category> {
-        ListItems {
-            items: Category::iter().collect(),
-            state: ListState::default(),
-        }
-    }
-    // TODO toggle
-    pub fn current(&self) -> Option<&Category> {
-        match self.get_state_selected() {
-            Some(idx) => self.items.iter().nth(idx),
-            None => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct FilteredListItems<T> {
-    pub items: Vec<T>,
-    pub filtered: Vec<T>,
-    pub state: ListState,
-}
-
-impl<T> ListNavigate for FilteredListItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct TableItems<T> {
-    pub items: Vec<T>,
-    pub state: TableState,
-}
-
-impl<T> ListNavigate for TableItems<T> {
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-    fn next(&mut self) {
-        match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {}
-            (Some(i), l) => {
-                if i >= l - 1 {
-                    self.select_state(Some(0))
-                } else {
-                    self.select_state(Some(i + 1))
-                };
-            }
-            (None, _) => self.select_state(Some(0)),
-        }
-    }
-    fn previous(&mut self) {
-        match (self.get_state_selected(), self.get_items_len()) {
-            (_, 0) => {}
-            (Some(0), l) => self.select_state(Some(l - 1)),
-            (Some(i), _) => self.select_state(Some(i + 1)),
-            (None, _) => self.select_state(Some(0)),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GitConfig {
-    pub path: String,
-    pub is_selected: bool,
-}
-
-impl GitConfig {
-    pub fn load() -> Vec<GitConfig> {
-        // TODO
-        // read_tmp().unwrap()
-        vec![]
-    }
-}
-
-impl TableItems<GitConfig> {
-    pub fn load() -> TableItems<GitConfig> {
-        TableItems {
-            items: GitConfig::load(),
-            state: TableState::default(),
-        }
-    }
-    pub fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.items.len() {
-            if i == selected {
-                self.items[i].is_selected = !self.items[i].is_selected;
-                // update_tmp(&self.items[i]); // TODO
-            } else {
-                continue;
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Project {
-    pub id: u8,
-    pub path: String,
-    pub name: String,
-    pub desc: String,
-    pub category: Category,
-    pub status: ProjectStatus,
-    pub is_git: bool,
-    pub last_commit: String,
-}
-
-impl Project {
-    pub fn load(conn: Option<Connection>) -> Vec<Project> {
-        read_project(conn).expect("READ PROJECT ERROR")
-        // vec![]
-    }
-    pub fn new_in_pwd() -> Project {
-        let current_dir = env::current_dir().unwrap().display().to_string();
-        let name = current_dir.clone();
-        Project {
-            id: 0,
-            path: current_dir,
-            name: name,
-            desc: "".to_owned(),
-            category: Category::Unknown,
-            status: ProjectStatus::Unstable,
-            is_git: false,
-            last_commit: "N/A".to_owned(),
-        }
-    }
-    // TODO this is
-    pub fn cycle_status(&mut self) {
-        self.status = match self.status {
-            ProjectStatus::Stable => ProjectStatus::Unstable,
-            ProjectStatus::Unstable => ProjectStatus::Stable,
-        };
-        // TODO we need to write this
-        // update_project_status(self);
-    }
-}
-
-impl TableItems<Project> {
-    pub fn load(conn: Option<Connection>) -> TableItems<Project> {
-        TableItems {
-            items: Project::load(conn),
-            state: TableState::default(),
-        }
-    }
-    pub fn current(&self) -> Option<&Project> {
-        match self.get_state_selected() {
-            Some(idx) => self.items.iter().nth(idx),
-            None => None,
-        }
-    }
-    pub fn current_state(&self) -> (Option<usize>, Option<&Project>) {
-        match self.get_state_selected() {
-            Some(idx) => (Some(idx), self.items.iter().nth(idx)),
-            None => (None, None),
-        }
-    }
-    pub fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.items.len() {
-            if i == selected {
-                self.items[i].cycle_status();
-            } else {
-                continue;
-            }
-        }
-    }
-}
-
-// TODO i would like to nest these guys
-#[derive(Clone, Debug)]
-pub struct Todo {
-    pub id: u8,
-    pub parent_id: u8,
-    pub project_id: u8,
-    pub todo: String,
-    pub is_complete: bool,
-}
-
-impl FilteredListItems<Todo> {
-    pub fn load(conn: Option<Connection>) -> FilteredListItems<Todo> {
-        FilteredListItems {
-            items: read_todo(conn).expect("AA"),
-            filtered: vec![],
-            state: ListState::default(),
-        }
-    }
-    // TODO this is an imperfect one...
-    pub fn sort_by_complete(&mut self) {
-        self.filtered
-            .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
-    }
-    // TODO can this be a method for ListNavigate?
-    pub fn toggle(&mut self) {
-        let selected = self.state.selected().unwrap();
-        for i in 0..self.filtered.len() {
-            if i == selected {
-                self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                // TODO update_todo(&self.filtered[i]).expect("msg");
-            } else {
-                continue;
-            }
-        }
-        self.sort_by_complete()
-    }
-    pub fn select_filter_state(&mut self, idx: Option<usize>, project_id: u8) {
-        self.state.select(idx);
-        self.filter_from_projects(project_id);
-    }
-    pub fn filter_from_projects(&mut self, project_id: u8) {
-        let items = self.items.clone();
-        self.filtered = items
-            .into_iter()
-            .filter(|t| t.project_id == project_id)
-            .collect();
-    }
-}
-
-/// WINDOWS
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum Mode {
-    Normal,
-    Insert,
-}
-
-impl fmt::Display for Mode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            Self::Normal => write!(f, "NORMAL"),
-            Self::Insert => write!(f, "INSERT"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
-pub enum BaseWindow {
-    Project,
-    Todo,
-    Description,
-}
-
-impl fmt::Display for BaseWindow {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            Self::Project => write!(f, "PROJECTS"),
-            Self::Todo => write!(f, "TODO"),
-            Self::Description => write!(f, "DESC"),
-        }
-    }
-}
-
-impl ListItems<BaseWindow> {
-    fn new() -> ListItems<BaseWindow> {
-        ListItems {
-            items: BaseWindow::iter().collect(),
-            state: ListState::default(),
-        }
-    }
-    pub fn current(&mut self) -> Option<&BaseWindow> {
-        let idx = self.get_state_selected().unwrap();
-        self.items.iter().nth(idx)
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
-pub enum PopupWindow {
-    None,
-    SearchGitConfig,
-    AddTodo,
-    EditCategory,
-    EditDesc,
-}
-
-impl ListItems<PopupWindow> {
-    fn new() -> ListItems<PopupWindow> {
-        ListItems {
-            items: PopupWindow::iter().collect(),
-            state: ListState::default(),
-        }
-    }
-    fn current(&mut self) -> &PopupWindow {
-        let idx = self.get_state_selected().unwrap();
-        &self.items.iter().nth(idx).unwrap()
-    }
-}
-
-pub enum WindowStatus {
-    Loaded,
-    NotLoaded,
-}
-
-pub struct Window {
-    pub base: BaseWindow,
-    pub popup: PopupWindow,
-    pub status: WindowStatus,
-    pub mode: Mode,
-}
-
-impl Window {
-    fn new() -> Window {
-        Window {
-            base: BaseWindow::Project,
-            popup: PopupWindow::None,
-            status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
-        }
-    }
-    pub fn mode_color(&self) -> Color {
-        match self.mode {
-            Mode::Insert => Color::Yellow,
-            Mode::Normal => Color::Green,
-        }
-    }
-    pub fn base_focus_color(&self, window: BaseWindow) -> Color {
-        match self {
-            Window {
-                popup: PopupWindow::None,
-                base: window,
-                ..
-            } => Color::Yellow,
-            _ => Color::White,
-        }
-    }
-    fn to_project() -> Window {
-        Window {
-            base: BaseWindow::Project,
-            popup: PopupWindow::None,
-            status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
-        }
-    }
-}
-
-/// ENUMS
-#[derive(PartialEq, Eq, Debug, Clone, EnumString, EnumIter)]
-pub enum Category {
-    Unknown,
-    Math,
-    Haskell,
-    OCaml,
-    Rust,
-}
-
-impl fmt::Display for Category {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl FromSql for Category {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<Category>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
-
-impl ListItems<Category> {}
 
 /// APP
 pub struct App {
@@ -501,6 +79,7 @@ impl App {
         let conn = Connection::open(DATABASE).unwrap();
         // INITIALIZE DB
         initialize_db();
+
         App::load(Some(conn))
     }
     pub fn next(&mut self) {
@@ -627,8 +206,12 @@ impl App {
         }
     }
     /// WINDOW RULES
-    pub fn popup(&mut self, popup: PopupWindow) {
-        self.window.popup = popup
+    pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
+        self.window.popup = popup;
+        match mode {
+            Some(m) => self.window.mode = m,
+            None => ()
+        }
     }
     pub fn close_popup(&mut self) {
         self.window.popup = PopupWindow::None;
@@ -715,9 +298,467 @@ impl App {
             Window { popup: PopupWindow::None,    base: BaseWindow::Project, .. } => self.projects.toggle(),
             Window { popup: PopupWindow::None,    base: BaseWindow::Todo, .. }    => self.todos.toggle(),
             Window { popup: PopupWindow::AddTodo, base: _, .. }                   => self.configs.toggle(),
+            Window { popup: PopupWindow::EditCategory, base: _, .. }              => match self.projects.current() {
+                Some(p) => self.categories.toggle(p),
+                None => {}
+            }
             _ => {}
         }
     }
 
     pub fn delete_todo(&mut self) {}
+}
+
+#[derive(Debug, Clone)]
+pub struct Project {
+    pub id: u8,
+    pub path: String,
+    pub name: String,
+    pub desc: String,
+    pub category: Category,
+    pub status: ProjectStatus,
+    pub is_git: bool,
+    pub last_commit: String,
+}
+
+impl Project {
+    pub fn load(conn: Option<Connection>) -> Vec<Project> {
+        read_project(conn).expect("READ PROJECT ERROR")
+        // vec![]
+    }
+    pub fn new_in_pwd() -> Project {
+        let current_dir = env::current_dir().unwrap().display().to_string();
+        let name = current_dir.clone();
+        Project {
+            id: 0,
+            path: current_dir,
+            name: name,
+            desc: "".to_owned(),
+            category: Category::Unknown,
+            status: ProjectStatus::Unstable,
+            is_git: false,
+            last_commit: "N/A".to_owned(),
+        }
+    }
+    // TODO this is
+    pub fn cycle_status(&mut self) {
+        self.status = match self.status {
+            ProjectStatus::Stable => ProjectStatus::Unstable,
+            ProjectStatus::Unstable => ProjectStatus::Stable,
+        };
+        // TODO we need to write this
+        // update_project_status(self);
+    }
+}
+
+impl TableItems<Project> {
+    pub fn load(conn: Option<Connection>) -> TableItems<Project> {
+        TableItems {
+            items: Project::load(conn),
+            state: TableState::default(),
+        }
+    }
+    pub fn current(&self) -> Option<&Project> {
+        match self.get_state_selected() {
+            Some(idx) => self.items.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn current_state(&self) -> (Option<usize>, Option<&Project>) {
+        match self.get_state_selected() {
+            Some(idx) => (Some(idx), self.items.iter().nth(idx)),
+            None => (None, None),
+        }
+    }
+    pub fn toggle(&mut self) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].cycle_status();
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+/// STRUCTS
+pub trait ListNavigate {
+    fn get_items_len<'a>(&'a self) -> usize;
+    fn get_state_selected<'a>(&'a self) -> Option<usize>;
+    fn select_state<'a>(&'a mut self, idx: Option<usize>);
+    fn next(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(i), l) => {
+                if i >= l - 1 {
+                    self.select_state(Some(0))
+                } else {
+                    self.select_state(Some(i + 1))
+                };
+            }
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn previous(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(0), l) => self.select_state(Some(l - 1)),
+            (Some(i), _) => self.select_state(Some(i - 1)),
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn unselect(&mut self) {
+        self.select_state(None);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ListItems<T> {
+    pub items: Vec<T>,
+    pub state: ListState,
+}
+
+impl<T> ListNavigate for ListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
+
+// TODO
+
+
+#[derive(Clone, Debug)]
+pub struct FilteredListItems<T> {
+    pub items: Vec<T>,
+    pub filtered: Vec<T>,
+    pub state: ListState,
+}
+
+impl<T> ListNavigate for FilteredListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TableItems<T> {
+    pub items: Vec<T>,
+    pub state: TableState,
+}
+
+impl<T> ListNavigate for TableItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+    fn next(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(i), l) => {
+                if i >= l - 1 {
+                    self.select_state(Some(0))
+                } else {
+                    self.select_state(Some(i + 1))
+                };
+            }
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn previous(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(0), l) => self.select_state(Some(l - 1)),
+            (Some(i), _) => self.select_state(Some(i + 1)),
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GitConfig {
+    pub path: String,
+    pub is_selected: bool,
+}
+
+impl GitConfig {
+    pub fn load() -> Vec<GitConfig> {
+        // TODO unwrap
+        read_tmp(None).unwrap()
+        // vec![]
+    }
+}
+
+impl TableItems<GitConfig> {
+    pub fn load() -> TableItems<GitConfig> {
+        TableItems {
+            items: GitConfig::load(),
+            state: TableState::default(),
+        }
+    }
+    pub fn toggle(&mut self) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].is_selected = !self.items[i].is_selected;
+                // update_tmp(&self.items[i]); // TODO
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+// TODO i would like to nest these guys
+#[derive(Clone, Debug)]
+pub struct Todo {
+    pub id: u8,
+    pub parent_id: u8,
+    pub project_id: u8,
+    pub todo: String,
+    pub is_complete: bool,
+}
+
+impl FilteredListItems<Todo> {
+    pub fn load(conn: Option<Connection>) -> FilteredListItems<Todo> {
+        FilteredListItems {
+            items: read_todo(conn).expect("AA"),
+            filtered: vec![],
+            state: ListState::default(),
+        }
+    }
+    // TODO this is an imperfect one...
+    pub fn sort_by_complete(&mut self) {
+        self.filtered
+            .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
+    }
+    // TODO can this be a method for ListNavigate?
+    pub fn toggle(&mut self) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.filtered.len() {
+            if i == selected {
+                self.filtered[i].is_complete = !self.filtered[i].is_complete;
+                // TODO update_todo(&self.filtered[i]).expect("msg");
+            } else {
+                continue;
+            }
+        }
+        self.sort_by_complete()
+    }
+    pub fn select_filter_state(&mut self, idx: Option<usize>, project_id: u8) {
+        self.state.select(idx);
+        self.filter_from_projects(project_id);
+    }
+    pub fn filter_from_projects(&mut self, project_id: u8) {
+        let items = self.items.clone();
+        self.filtered = items
+            .into_iter()
+            .filter(|t| t.project_id == project_id)
+            .collect();
+    }
+}
+
+/// ENUMS
+/// WINDOWS
+
+pub struct Window {
+    pub base: BaseWindow,
+    pub popup: PopupWindow,
+    pub status: WindowStatus,
+    pub mode: Mode,
+}
+
+impl Window {
+    fn new() -> Window {
+        Window {
+            base: BaseWindow::Project,
+            popup: PopupWindow::None,
+            status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
+        }
+    }
+    pub fn mode_color(&self) -> Color {
+        match self.mode {
+            Mode::Insert => Color::Yellow,
+            Mode::Normal => Color::Green,
+        }
+    }
+    pub fn base_focus_color(&self, window: BaseWindow) -> Color {
+        match self {
+            Window {
+                popup: PopupWindow::None,
+                base: window,
+                ..
+            } => Color::Yellow,
+            _ => Color::White,
+        }
+    }
+    fn to_project() -> Window {
+        Window {
+            base: BaseWindow::Project,
+            popup: PopupWindow::None,
+            status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
+pub enum BaseWindow {
+    Project,
+    Todo,
+    Description,
+}
+
+impl fmt::Display for BaseWindow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Project => write!(f, "PROJECTS"),
+            Self::Todo => write!(f, "TODO"),
+            Self::Description => write!(f, "DESC"),
+        }
+    }
+}
+
+impl ListItems<BaseWindow> {
+    fn new() -> ListItems<BaseWindow> {
+        ListItems {
+            items: BaseWindow::iter().collect(),
+            state: ListState::default(),
+        }
+    }
+    pub fn current(&mut self) -> Option<&BaseWindow> {
+        let idx = self.get_state_selected().unwrap();
+        self.items.iter().nth(idx)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
+pub enum PopupWindow {
+    None,
+    SearchGitConfig,
+    AddTodo,
+    EditCategory,
+    EditDesc,
+}
+
+impl ListItems<PopupWindow> {
+    fn new() -> ListItems<PopupWindow> {
+        ListItems {
+            items: PopupWindow::iter().collect(),
+            state: ListState::default(),
+        }
+    }
+    fn current(&mut self) -> &PopupWindow {
+        let idx = self.get_state_selected().unwrap();
+        &self.items.iter().nth(idx).unwrap()
+    }
+}
+
+pub enum WindowStatus {
+    Loaded,
+    NotLoaded,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, EnumString, EnumIter)]
+pub enum Category {
+    Unknown,
+    Math,
+    Haskell,
+    OCaml,
+    Rust,
+}
+
+impl fmt::Display for Category {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl FromSql for Category {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse::<Category>()
+            .map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl ListItems<Category> {
+    pub fn new() -> ListItems<Category> {
+        ListItems {
+            items: Category::iter().collect(),
+            state: ListState::default(),
+        }
+    }
+    // TODO toggle
+    pub fn current(&self) -> Option<&Category> {
+        match self.get_state_selected() {
+            Some(idx) => self.items.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn toggle(&mut self, project: &Project) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                update_project_category(project, &self.items[i]);
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Mode {
+    Normal,
+    Insert,
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Normal => write!(f, "NORMAL"),
+            Self::Insert => write!(f, "INSERT"),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, EnumString)]
+pub enum ProjectStatus {
+    Stable,
+    Unstable,
+}
+
+impl fmt::Display for ProjectStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+// TODO refactor to include-sql
+impl FromSql for ProjectStatus {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse::<ProjectStatus>()
+            .map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
 }

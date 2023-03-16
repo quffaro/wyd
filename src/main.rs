@@ -4,5 +4,5 @@
 // add priority to project
 mod refactor;
 fn main() {
-    refactor::new_viewer::viewer().unwrap();
+    refactor::new_viewer::viewer();
 }

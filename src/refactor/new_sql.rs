@@ -1,6 +1,10 @@
 use crate::refactor::new_lib::DATABASE;
-use crate::refactor::new_lib::{Category, GitConfig, Project, Todo};
+use regex::Regex;
+
+use crate::refactor::new_lib::{ProjectStatus, Category, GitConfig, Project, Todo};
 use rusqlite::{params, Connection, Result};
+
+use super::new_lib::fetch_config_files;
 
 /// CREATE TABLES
 const CREATE_CONFIG: &str = "CREATE TABLE IF NOT EXISTS tmp_git_config (
@@ -187,8 +191,85 @@ const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
 pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
-    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", project.category), project.id))
+    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", cat), project.id))
         .expect("A");
 
     Ok(())
+}
+
+///
+const UPDATE_TMP: &str = "update tmp_git_config set is_selected = ?1 where path = ?2;";
+pub fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_TMP, (&tmp.is_selected, &tmp.path))
+        .expect("A");
+
+    Ok(())
+}
+
+
+
+/// WRITE TEMPORARY PROJECTS
+const INSERT_INTO_TMP: &str = "INSERT OR IGNORE INTO tmp_git_config (path) VALUES (?)";
+pub fn write_tmp(tmp: Vec<String>) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    let mut stmt = conn.prepare(INSERT_INTO_TMP)?;
+    for x in tmp {
+        stmt.execute([x])?;
+    }
+
+    Ok(())
+}
+
+pub fn init_tmp_git_config() -> Result<(), rusqlite::Error> {
+    let tmp = fetch_config_files();
+    write_tmp(tmp);
+
+    Ok(())
+}
+
+/// all new tmps are written to
+// const READ_TMP_SELECTED: &str    = "select path from tmp_git_config where is_selected = 1";
+const READ_TMP_SELECTED: &str = "select path from tmp_git_config where is_selected = 1 and path not in (select path from project)";
+const WRITE_TMP_TO_PROJECT: &str =
+    "insert or replace into project (path,name,cat,status,is_git) values (?1, ?2, ?3, ?4,1);";
+pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    let mut read_stmt = conn.prepare(READ_TMP_SELECTED)?;
+
+    let tmp_project: Result<Vec<Project>, rusqlite::Error> = read_stmt
+        .query_map([], |row| {
+            Ok(Project {
+                id: 0,
+                path: row.get(0)?,
+                name: regex_repo(row.get(0)?),
+                desc: "Example".to_owned(),
+                category: Category::Unknown,
+                status: ProjectStatus::Unstable,
+                is_git: true,
+                last_commit: "N/A".to_owned(),
+            })
+        })
+        .expect("AAAA")
+        .collect();
+
+    let mut write_stmt = conn.prepare(WRITE_TMP_TO_PROJECT)?;
+    for x in tmp_project? {
+        write_stmt
+            .execute([x.path, x.name, x.category.to_string(), x.status.to_string()])
+            .expect("AAA!");
+    }
+
+    Ok(())
+}
+
+///
+fn regex_repo(path: String) -> String {
+    let re = Regex::new(r"(.+)/([^/]+)").expect("AAAA");
+    let caps = re.captures(&path).unwrap();
+
+    caps.get(0).unwrap().as_str().to_string()
 }

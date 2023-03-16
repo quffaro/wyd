@@ -3,6 +3,7 @@ use crate::refactor::new_lib::{
     App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
 };
 use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX};
+use crate::refactor::new_sql::{init_tmp_git_config};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -18,7 +19,9 @@ use tui::{
     },
     Frame, Terminal,
 };
-use tui_textarea::{Input, Key, TextArea};
+use tui_textarea::TextArea;
+// use tokio::task;
+use std::thread;
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     // setup terminal
@@ -47,6 +50,10 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     // select
     app.default_select();
+    
+    thread::spawn(|| {
+        init_tmp_git_config()
+    });
 
     let mut textarea = TextArea::default();
 
@@ -70,14 +77,15 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         }
                         KeyCode::Char('a') => app.add_project_in_dir(),
                         KeyCode::Char('d') => app.delete_todo(),
-                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc),
-                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory),
-                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo),
+                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc, None),
+                        KeyCode::Char('r') => app.popup(PopupWindow::EditCategory, Some(Mode::Normal)),
+                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo, None),
+                        KeyCode::Char('p') => app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal)),
                         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down => app.next(),
-                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                        KeyCode::Enter => app.toggle(),
+                        KeyCode::Char('j') | KeyCode::Left  => app.cycle_focus_previous(),
+                        KeyCode::Char('l') | KeyCode::Down  => app.next(),
+                        KeyCode::Char('k') | KeyCode::Up    => app.previous(),
+                        KeyCode::Enter                      => app.toggle(),
                         _ => {}
                     }
                 }
@@ -113,7 +121,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{:#?} {:#?}", app.window.popup, app.window.mode))
+    let title = Paragraph::new(format!("{:#?} {:?}", app.window.popup, app.categories.state))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -240,6 +248,18 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
             }
             None => (),
         },
+        PopupWindow::SearchGitConfig => { 
+                // TODO performance 
+                
+
+                let size = rect.size();
+                let area = centered_rect(80, 40, size);
+                rect.render_widget(Clear, area); //this clears out the background
+
+                // which popup is decided here
+                let popup = render_popup_config_paths(&app);
+                rect.render_stateful_widget(popup, area, &mut app.configs.state);
+            }
         _ => (),
     }
 }
@@ -309,10 +329,10 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
         .widths(&[
-            Constraint::Length(50),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(20),
+            Constraint::Percentage(40),
+            Constraint::Percentage(10),
+            Constraint::Percentage(20),
+            Constraint::Percentage(30),
         ])
         .highlight_style(
             Style::default()
