@@ -1,3 +1,2 @@
 # wyd
-Displays local projects
-
+Ongoing development to organize my projects while learning Rust.
