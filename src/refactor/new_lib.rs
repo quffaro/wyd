@@ -1,6 +1,6 @@
 use crate::refactor::new_sql::{
     initialize_db, read_project, read_todo, update_project_category, update_project_desc,
-    write_new_todo, write_project, read_tmp, write_tmp,
+    write_new_todo, write_project, read_tmp, update_tmp, write_tmp_to_project,
 };
 use glob::glob;
 use shellexpand;
@@ -29,9 +29,10 @@ use tui_textarea::{Input, Key, TextArea};
 /// SQL
 /// // TODO needs ot be dynamic
 pub const DATABASE: &str = "projects.db";
-pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/"; // CUFFARO IS NOT GUARANTEED!
+pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/"; 
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
+pub const SUB_HOME_FOLDER: &str = "/Documents/";
 
 /// UI
 pub const HIGHLIGHT_SYMBOL: &str = ">> ";
@@ -289,6 +290,11 @@ impl App {
                 },
                 _ => (),
             },
+            PopupWindow::SearchGitConfig => {
+                write_tmp_to_project();
+                self.projects = TableItems::<Project>::load(None);
+                self.projects.select_state(Some(0));
+            }
             _ => (),
         }
         self.close_popup();
@@ -297,11 +303,11 @@ impl App {
         match self.window {
             Window { popup: PopupWindow::None,    base: BaseWindow::Project, .. } => self.projects.toggle(),
             Window { popup: PopupWindow::None,    base: BaseWindow::Todo, .. }    => self.todos.toggle(),
-            Window { popup: PopupWindow::AddTodo, base: _, .. }                   => self.configs.toggle(),
+            Window { popup: PopupWindow::SearchGitConfig, base: _, .. }           => self.configs.toggle(),
             Window { popup: PopupWindow::EditCategory, base: _, .. }              => match self.projects.current() {
                 Some(p) => self.categories.toggle(p),
                 None => {}
-            }
+            },
             _ => {}
         }
     }
@@ -358,6 +364,14 @@ impl TableItems<Project> {
             state: TableState::default(),
         }
     }
+    // pub fn reload(mut self, conn: Option<Connection>, idx: Option<u8>) {
+    //     self = TableItems::<Project>::load(conn);
+    //     match idx {
+    //         Some(i) => self.select_state(i),
+    //         None => self.select_state(0),
+    //     }
+
+    // }
     pub fn current(&self) -> Option<&Project> {
         match self.get_state_selected() {
             Some(idx) => self.items.iter().nth(idx),
@@ -486,7 +500,7 @@ impl<T> ListNavigate for TableItems<T> {
         match (self.get_state_selected(), self.get_items_len()) {
             (_, 0) => {}
             (Some(0), l) => self.select_state(Some(l - 1)),
-            (Some(i), _) => self.select_state(Some(i + 1)),
+            (Some(i), _) => self.select_state(Some(i - 1)),
             (None, _) => self.select_state(Some(0)),
         }
     }
@@ -518,7 +532,7 @@ impl TableItems<GitConfig> {
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
-                // update_tmp(&self.items[i]); // TODO
+                update_tmp(&self.items[i]); // TODO
             } else {
                 continue;
             }

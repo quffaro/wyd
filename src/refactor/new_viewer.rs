@@ -2,14 +2,16 @@
 use crate::refactor::new_lib::{
     App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
 };
-use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX};
+use crate::refactor::new_lib::{HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER};
 use crate::refactor::new_sql::{init_tmp_git_config};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use std::env::current_dir;
 use std::io;
+use dirs::home_dir;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -21,7 +23,7 @@ use tui::{
 };
 use tui_textarea::TextArea;
 // use tokio::task;
-use std::thread;
+use std::thread::{self, current};
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     // setup terminal
@@ -91,7 +93,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 }
             }
             Window {
-                popup: ref popup,
+                ref popup,
                 base: _,
                 ..
             } => match app.window.mode {
@@ -121,7 +123,8 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
-    let title = Paragraph::new(format!("{:#?} {:?}", app.window.popup, app.categories.state))
+    let pwd = current_dir().unwrap().into_os_string().into_string().unwrap();
+    let title = Paragraph::new(pwd)
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -265,7 +268,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
 }
 
 fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
-    let msg = "\n\n\n\n\n\n\n(press `p` to search for git configs)".to_owned();
+    let msg = "".to_owned();
     let no_projects = Paragraph::new(msg)
         .style(
             Style::default()
@@ -284,7 +287,7 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
                         Color::White
                     }),
                 )
-                .title("(projects)")
+                .title("(press `p` to search for git configs)")
                 .border_type(BorderType::Plain),
         );
 
@@ -293,6 +296,7 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
 
 // render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
+    let home_dir = format!("{}{}", home_dir().unwrap().into_os_string().into_string().unwrap(), SUB_HOME_FOLDER);
     let rows: Vec<Row> = app
         .projects
         .items
@@ -301,7 +305,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Row::new(vec![
                 Cell::from(
                     p.name
-                        .replace(SEARCH_DIRECTORY_PREFIX, "...")
+                        .replace(&home_dir, "...")
                         .replace("/.git/config", "") // TODO into constant
                         .clone(),
                 ),
