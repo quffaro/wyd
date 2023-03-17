@@ -1,4 +1,8 @@
 // TODO todos want date column
+// TODO shift-a for git repo
+// TODO SeaORM
+// TODO Oso
+// TODO ui folder
 use crate::library::code::{
     App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
     SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER,
@@ -23,7 +27,7 @@ use tui::{
     },
     Frame, Terminal,
 };
-use tui_textarea::TextArea;
+use tui_textarea::{Key, Input, TextArea};
 // use tokio::task;
 use std::thread::{self, current};
 
@@ -73,30 +77,47 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 base: _,
                 ..
             } => {
-                if let Event::Key(key) = event::read().expect("Key Error") {
-                    match key.code {
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        KeyCode::Char('h') => app.popup(PopupWindow::Help, Some(Mode::Normal)),
-                        KeyCode::Char('a') => app.add_project_in_dir(),
-                        KeyCode::Char('d') => app.delete_todo(),
-                        KeyCode::Char('e') => app.popup(PopupWindow::EditDesc, None),
-                        KeyCode::Char('r') => {
-                            app.popup(PopupWindow::EditCategory, Some(Mode::Normal))
-                        }
-                        KeyCode::Char('t') => app.popup(PopupWindow::AddTodo, None),
-                        KeyCode::Char('p') => {
-                            app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal))
-                        }
-                        KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
-                        KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
-                        KeyCode::Char('l') | KeyCode::Down => app.next(),
-                        KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                        KeyCode::Enter => app.toggle(),
-                        _ => {}
-                    }
+                match crossterm::event::read().expect("MAIN CAPTURE ERROR").into() {
+                    Input { key: Key::Char('q'), .. } => {return Ok(())},
+                    Input { key: Key::Char('h'), .. } => app.popup(PopupWindow::Help, Some(Mode::Normal)),
+                    Input { key: Key::Char('a'), .. } => app.add_project_in_dir(false),
+                    Input { key: Key::Char('A'), .. } => app.add_project_in_dir(true),
+                    Input { key: Key::Char('d'), .. } => app.delete_todo(),
+                    Input { key: Key::Char('e'), .. } => app.popup(PopupWindow::EditDesc, None),
+                    Input { key: Key::Char('r'), .. } => app.popup(PopupWindow::EditCategory, Some(Mode::Normal)),
+                    Input { key: Key::Char('t'), .. } => app.popup(PopupWindow::AddTodo, None),
+                    Input { key: Key::Char('p'), .. } => app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal)),
+                    Input { key: Key::Enter, .. }     => app.toggle(),
+                    Input { key: Key::Char(';'), .. } | Input{ key: Key::Right, .. } => app.cycle_focus_next(),
+                    Input { key: Key::Char('j'), .. } | Input{ key: Key::Left, .. } => app.cycle_focus_previous(),
+                    Input { key: Key::Char('l'), .. } | Input{ key: Key::Up, .. } => app.next(),
+                    Input { key: Key::Char('k'), .. } | Input{ key: Key::Down, .. } => app.previous(),
+                    _ => {}
                 }
+                // if let Event::Key(key) = event::read().expect("Key Error") {
+                //     match key.code {
+                //         KeyCode::Char('q') => {
+                //             return Ok(());
+                //         }
+                //         KeyCode::Char('h') => app.popup(PopupWindow::Help, Some(Mode::Normal)),
+                //         KeyCode::Char('a') => app.add_project_in_dir(),
+                //         KeyCode::Char('d') => app.delete_todo(),
+                //         KeyCode::Char('e') => app.popup(PopupWindow::EditDesc, None),
+                //         KeyCode::Char('r') => {
+                //             app.popup(PopupWindow::EditCategory, Some(Mode::Normal))
+                //         }
+                //         KeyCode::Char('t') => app.popup(PopupWindow::AddTodo, None),
+                //         KeyCode::Char('p') => {
+                //             app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal))
+                //         }
+                //         KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
+                //         KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                //         KeyCode::Char('l') | KeyCode::Down => app.next(),
+                //         KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                //         KeyCode::Enter => app.toggle(),
+                //         _ => {}
+                //     }
+                // }
             }
             Window {
                 ref popup, base: _, ..

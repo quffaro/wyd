@@ -1,5 +1,4 @@
-use crate::library::code::Project;
-use crate::library::sql::update_project_last_commit;
+// use crate::library::sql::update_project_last_commit;
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
@@ -16,19 +15,19 @@ struct Commit {
     body: String,
 }
 
-#[tokio::main]
-pub async fn request_string(project: &Project) -> Result<()> {
-
-    let request = request(project).await;
+// #[tokio::main]
+pub async fn request_string() -> Result<()> {
+    let request = request().await;
     let string = request?.as_str().and_then(|x| Some(x.to_owned()));
 
-    // println!("{}", string.unwrap());
-    update_project_last_commit(string.unwrap());
+    println!("{}", string.unwrap());
+    // update_project_last_commit(string.unwrap());
 
     Ok(())
 }
 
-pub async fn request(project: &Project) -> Result<serde_json::Value> {
+#[tokio::main]
+pub async fn request() -> Result<serde_json::Value> {
     // TODO this needs better error handling...
     let mut secret = fs::read_to_string("../pat/wyd_pat.txt").expect("A");
     secret.pop();
@@ -44,10 +43,12 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
     // TODO use user_agent function?
 
     // println!("{:#?}", headers);
+    let owner = "quffaro";
+    let repo = "wyd";
     let request_url = format!(
         "https://api.github.com/repos/{owner}/{repo}/commits",
-        owner = project.owner,
-        repo = project.repo,
+        owner = owner,
+        repo = repo
     );
 
     // let timeout = Duration::new(5, 0);
@@ -79,7 +80,7 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
         .unwrap();
     // TODO map as_str through option?
 
-    // println!("{:#?}", result);
+    println!("{:#?}", result);
     Ok(result).cloned()
     // .cloned()
     //UTC time, ISO 8601

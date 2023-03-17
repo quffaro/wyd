@@ -184,7 +184,7 @@ impl App {
             None => (),
         }
     }
-    pub fn add_project_in_dir(&mut self) {
+    pub fn add_project_in_dir(&mut self, is_find_git: bool) {
         // write_project(Project::new_in_pwd()); // SQL
         match self.window {
             Window {
