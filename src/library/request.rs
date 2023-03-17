@@ -1,4 +1,5 @@
-use super::sql::update_project_last_commit;
+use crate::library::code::Project;
+use crate::library::sql::update_project_last_commit;
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
@@ -16,8 +17,8 @@ struct Commit {
 }
 
 #[tokio::main]
-pub async fn request_string() -> Result<()> {
-    let request = request().await;
+pub async fn request_string(project: &Project) -> Result<()> {
+    let request = request(project).await;
     let string = request?.as_str().and_then(|x| Some(x.to_owned()));
 
     // println!("{}", string.unwrap());
@@ -39,7 +40,7 @@ pub async fn request_string() -> Result<()> {
     // }
 }
 
-pub async fn request() -> Result<serde_json::Value> {
+pub async fn request(project: &Project) -> Result<serde_json::Value> {
     // TODO this needs better error handling...
     let mut secret = fs::read_to_string("../pat/wyd_pat.txt").expect("A");
     secret.pop();
@@ -55,12 +56,10 @@ pub async fn request() -> Result<serde_json::Value> {
     // TODO use user_agent function?
 
     // println!("{:#?}", headers);
-    let owner = "rust-lang";
-    let repo = "cargo";
     let request_url = format!(
         "https://api.github.com/repos/{owner}/{repo}/commits",
-        owner = owner,
-        repo = repo
+        owner = project.owner,
+        repo = project.repo,
     );
 
     // let timeout = Duration::new(5, 0);
