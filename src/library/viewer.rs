@@ -3,6 +3,7 @@ use crate::library::code::{
     App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
     SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER,
 };
+use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -10,6 +11,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dirs::home_dir;
+use iso8601::datetime;
 use std::env::current_dir;
 use std::io;
 use tui::{
@@ -54,6 +56,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     app.default_select();
 
     thread::spawn(|| init_tmp_git_config());
+    thread::spawn(|| request_string());
 
     let mut textarea = TextArea::default();
 
@@ -75,6 +78,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         KeyCode::Char('q') => {
                             return Ok(());
                         }
+                        KeyCode::Char('h') => app.popup(PopupWindow::Help, Some(Mode::Normal)),
                         KeyCode::Char('a') => app.add_project_in_dir(),
                         KeyCode::Char('d') => app.delete_todo(),
                         KeyCode::Char('e') => app.popup(PopupWindow::EditDesc, None),
@@ -232,7 +236,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 let category_block = Block::default()
                     .borders(Borders::ALL)
                     .style(Style::default().fg(app.window.mode_color()))
-                    .title("(todo)")
+                    .title("(edit category)")
                     .border_type(BorderType::Plain);
 
                 let categories: Vec<ListItem> = app
@@ -266,6 +270,14 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
             let popup = render_popup_config_paths(&app);
             rect.render_stateful_widget(popup, area, &mut app.configs.state);
         }
+        PopupWindow::Help => {
+            let size = rect.size();
+            let area = centered_rect(60, 60, size);
+            rect.render_widget(Clear, area);
+
+            let popup = render_popup_help_table(app);
+            rect.render_widget(popup, area);
+        }
         _ => (),
     }
 }
@@ -297,6 +309,55 @@ fn render_no_projects<'a>(app: &App) -> Paragraph<'a> {
     no_projects
 }
 
+fn render_popup_help_table<'a>(app: &App) -> Table<'a> {
+    let rows: Vec<Row> = vec![
+        Row::new(vec![Cell::from("h"), Cell::from("help")]),
+        Row::new(vec![Cell::from("a"), Cell::from("add project in pwd")]),
+        Row::new(vec![
+            Cell::from("p"),
+            Cell::from("recursively search for git configs in Documents"),
+        ]),
+        Row::new(vec![
+            Cell::from("e"),
+            Cell::from("edit project description"),
+        ]),
+        Row::new(vec![Cell::from("r"), Cell::from("edit project category")]),
+        Row::new(vec![
+            Cell::from("t"),
+            Cell::from("add todo item under project"),
+        ]),
+        Row::new(vec![Cell::from("d"), Cell::from("delete todo item")]),
+        Row::new(vec![Cell::from("Enter"), Cell::from("toggle")]),
+        Row::new(vec![Cell::from("Esc"), Cell::from("go to Normal mode")]),
+        Row::new(vec![Cell::from("i"), Cell::from("go to Visual mode")]),
+        Row::new(vec![
+            Cell::from("w"),
+            Cell::from("save and quit from popup"),
+        ]),
+        Row::new(vec![Cell::from("q"), Cell::from("quit popup without save")]),
+    ];
+
+    let help = Table::new(rows)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .title("(help)")
+                .borders(Borders::ALL)
+                .style(
+                    Style::default().fg(if app.window.popup == PopupWindow::Help {
+                        Color::Yellow
+                    } else {
+                        Color::Gray
+                    }),
+                )
+                .border_type(BorderType::Plain),
+        )
+        .header(Row::new(vec!["Key", "Desc"]))
+        .widths(&[Constraint::Percentage(10), Constraint::Percentage(90)]);
+
+    help
+}
+
 // render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
     let home_dir = format!(
@@ -318,7 +379,13 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 ),
                 Cell::from(p.category.to_string().clone()),
                 Cell::from(p.status.to_string().clone()),
-                Cell::from(p.last_commit.clone()),
+                Cell::from(p.last_commit.to_string().clone()),
+                // Cell::from(format!(
+                //     "{} {}:{}",
+                //     iso8601::datetime(&p.last_commit).unwrap().date,
+                //     iso8601::datetime(&p.last_commit).unwrap().time.hour,
+                //     iso8601::datetime(&p.last_commit).unwrap().time.minute,
+                // )),
             ])
         })
         .collect();
@@ -342,8 +409,8 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         .widths(&[
             Constraint::Percentage(40),
             Constraint::Percentage(10),
-            Constraint::Percentage(20),
-            Constraint::Percentage(30),
+            Constraint::Percentage(10),
+            Constraint::Percentage(40),
         ])
         .highlight_style(
             Style::default()
@@ -434,13 +501,15 @@ fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
         .items
         .iter()
         .map(|p| {
-            let y = p.path.replace(&home_dir, ".../").replace("/.git.config","").clone();
-            Row::new(vec![
-                match p.is_selected {
-                    true  => Cell::from(format!("[x] {}", y)),
-                    false => Cell::from(format!("[ ] {}", y))
-                }
-            ])
+            let y = p
+                .path
+                .replace(&home_dir, ".../")
+                .replace("/.git.config", "")
+                .clone();
+            Row::new(vec![match p.is_selected {
+                true => Cell::from(format!("[x] {}", y)),
+                false => Cell::from(format!("[ ] {}", y)),
+            }])
         })
         .collect();
 

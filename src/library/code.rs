@@ -1,22 +1,29 @@
 use crate::library::sql::{
-    initialize_db, read_project, read_todo, update_project_category, update_project_desc,
-    write_new_todo, write_project, read_tmp, update_tmp, write_tmp_to_project, regex_repo
-    // TODO move regex repo to another folder
+    initialize_db,
+    read_project,
+    read_tmp,
+    read_todo,
+    regex_repo, // TODO move regex repo to another folder
+    update_project_category,
+    update_project_desc,
+    update_project_status,
+    update_tmp,
+    write_new_todo,
+    write_project,
+    write_tmp_to_project,
 };
 use glob::glob;
-use shellexpand;
-use std::path::PathBuf;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
     Connection,
 };
+use shellexpand;
+use std::path::PathBuf;
 use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
+use tui::style::Color;
 use tui::widgets::{ListState, TableState};
-use tui::{
-    style::Color,
-};
 use tui_textarea::{Input, Key, TextArea};
 
 // use super::new_sql::update_project_category;
@@ -24,7 +31,7 @@ use tui_textarea::{Input, Key, TextArea};
 /// SQL
 /// // TODO needs ot be dynamic
 pub const DATABASE: &str = "projects.db";
-pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/"; 
+pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/";
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 pub const SUB_HOME_FOLDER: &str = "/Documents/";
@@ -185,16 +192,23 @@ impl App {
                 base: BaseWindow::Project,
                 ..
             } => {
+                // TODO discover the higher git repo
                 let path = env::current_dir().unwrap().display().to_string();
-                let name = regex_repo(path.clone());
+                let repo = match git2::Repository::discover(path) {
+                    Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+                    _ => "N/A".to_string(),
+                };
+                let name = regex_repo(repo.clone());
                 write_project(Project {
                     id: 0,
-                    path: path,
+                    path: repo.clone(),
                     name: name,
                     desc: "N/A".to_owned(),
                     category: Category::Unknown,
                     status: ProjectStatus::Unstable,
                     is_git: false,
+                    owner: "".to_owned(), //TODO
+                    repo: repo.clone(),
                     last_commit: "N/A".to_owned(),
                 });
                 self.projects = TableItems::<Project>::load(None);
@@ -208,7 +222,7 @@ impl App {
         self.window.popup = popup;
         match mode {
             Some(m) => self.window.mode = m,
-            None => ()
+            None => (),
         }
     }
     pub fn close_popup(&mut self) {
@@ -233,19 +247,30 @@ impl App {
     }
     pub fn popup_mode_normal(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
         match crossterm::event::read().expect("POPUP NORMAL ERROR").into() {
-            Input { key: Key::Char('i'), .. } => self.window.mode = Mode::Insert,
-            Input { key: Key::Char('q'), .. } => {
+            Input {
+                key: Key::Char('i'),
+                ..
+            } => self.window.mode = Mode::Insert,
+            Input {
+                key: Key::Char('q'),
+                ..
+            } => {
                 self.close_popup();
                 *textarea = TextArea::default();
             }
-            Input { key: Key::Char('w'), .. } => {
+            Input {
+                key: Key::Char('w'),
+                ..
+            } => {
                 self.popup_write_and_close(textarea, popup);
                 *textarea = TextArea::default();
             }
-            Input { key: Key::Down, .. }  => self.next(),
-            Input { key: Key::Up, .. }    => self.previous(),
-            Input { key: Key::Enter, .. } => self.toggle(),
-            _                             => {}
+            Input { key: Key::Down, .. } => self.next(),
+            Input { key: Key::Up, .. } => self.previous(),
+            Input {
+                key: Key::Enter, ..
+            } => self.toggle(),
+            _ => {}
         }
     }
     pub fn popup_write_and_close(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
@@ -298,10 +323,26 @@ impl App {
     }
     pub fn toggle(&mut self) {
         match self.window {
-            Window { popup: PopupWindow::None,    base: BaseWindow::Project, .. } => self.projects.toggle(),
-            Window { popup: PopupWindow::None,    base: BaseWindow::Todo, .. }    => self.todos.toggle(),
-            Window { popup: PopupWindow::SearchGitConfig, base: _, .. }           => self.configs.toggle(),
-            Window { popup: PopupWindow::EditCategory, base: _, .. }              => match self.projects.current() {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => self.projects.toggle(),
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Todo,
+                ..
+            } => self.todos.toggle(),
+            Window {
+                popup: PopupWindow::SearchGitConfig,
+                base: _,
+                ..
+            } => self.configs.toggle(),
+            Window {
+                popup: PopupWindow::EditCategory,
+                base: _,
+                ..
+            } => match self.projects.current() {
                 Some(p) => self.categories.toggle(p),
                 None => {}
             },
@@ -321,6 +362,8 @@ pub struct Project {
     pub category: Category,
     pub status: ProjectStatus,
     pub is_git: bool,
+    pub owner: String,
+    pub repo: String,
     pub last_commit: String,
 }
 
@@ -334,12 +377,14 @@ impl Project {
         let name = current_dir.clone();
         Project {
             id: 0,
-            path: current_dir,
+            path: current_dir.clone(),
             name: name,
             desc: "".to_owned(),
             category: Category::Unknown,
             status: ProjectStatus::Unstable,
             is_git: false,
+            owner: "".to_owned(), //TODO
+            repo: current_dir.clone(),
             last_commit: "N/A".to_owned(),
         }
     }
@@ -350,7 +395,7 @@ impl Project {
             ProjectStatus::Unstable => ProjectStatus::Stable,
         };
         // TODO we need to write this
-        // update_project_status(self);
+        update_project_status(self);
     }
 }
 
@@ -443,7 +488,6 @@ impl<T> ListNavigate for ListItems<T> {
 }
 
 // TODO
-
 
 #[derive(Clone, Debug)]
 pub struct FilteredListItems<T> {
@@ -668,6 +712,7 @@ pub enum PopupWindow {
     AddTodo,
     EditCategory,
     EditDesc,
+    Help,
 }
 
 impl ListItems<PopupWindow> {

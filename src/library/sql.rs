@@ -1,4 +1,6 @@
-use crate::library::code::{fetch_config_files, DATABASE, ProjectStatus, Category, GitConfig, Project, Todo};
+use crate::library::code::{
+    fetch_config_files, Category, GitConfig, Project, ProjectStatus, Todo, DATABASE,
+};
 use regex::Regex;
 use rusqlite::{params, Connection, Result};
 
@@ -16,6 +18,8 @@ const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     cat         varchar(255), 
     status      varchar(255),
     is_git      tinyint(1),
+    owner       varchar(255),
+    repo        varchar(255),
     last_commit varchar(255),
     UNIQUE(path)
 );";
@@ -38,11 +42,12 @@ pub fn initialize_db() -> Result<(), rusqlite::Error> {
 }
 
 /// READ PROJECTS FROM DB
-const READ_PROJECT: &str = "select id,path,name,desc,cat,status,is_git,last_commit from project";
+const READ_PROJECT: &str =
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from project";
 pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None    => Connection::open(DATABASE)?,
+        None => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_PROJECT)?;
@@ -59,7 +64,9 @@ pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::
                 category: row.get(4)?,
                 status: row.get(5)?, // TODO is this the best way?
                 is_git: row.get(6)?,
-                last_commit: match row.get(7)? {
+                owner: row.get(7)?,
+                repo: row.get(8)?,
+                last_commit: match row.get(9)? {
                     Some(x) => x,
                     None => "N/A".to_string(),
                 },
@@ -75,8 +82,8 @@ pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
 pub fn read_todo(conn: Option<Connection>) -> Result<Vec<Todo>, rusqlite::Error> {
     let conn = match conn {
-        Some(c)  => c,
-        None     => Connection::open(DATABASE)?,
+        Some(c) => c,
+        None => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TODO)?;
@@ -101,7 +108,7 @@ const READ_TMP: &str = "select path, is_selected from tmp_git_config where is_se
 pub fn read_tmp(conn: Option<Connection>) -> Result<Vec<GitConfig>, rusqlite::Error> {
     let conn = match conn {
         Some(c) => c,
-        None     => Connection::open(DATABASE)?,
+        None => Connection::open(DATABASE)?,
     };
 
     let mut stmt = conn.prepare(READ_TMP)?;
@@ -124,9 +131,11 @@ const INSERT_PROJECT: &str = "insert into project (
     desc, 
     cat, 
     status, 
-    is_git, 
+    is_git,
+    owner,
+    repo,
     last_commit
-) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)";
 pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
@@ -138,14 +147,15 @@ pub fn write_project(project: Project) -> Result<(), rusqlite::Error> {
         project.category.to_string(),
         project.status.to_string(),
         project.is_git,
+        project.owner,
+        project.repo,
         project.last_commit,
     ]);
 
     Ok(())
 }
 
-const WRITE_NEW_TODO: &str =
-    "insert or replace into todo (
+const WRITE_NEW_TODO: &str = "insert or replace into todo (
         parent_id,
         project_id,
         todo,
@@ -182,7 +192,6 @@ pub fn update_project_desc(project: &Project, desc: String) -> Result<(), rusqli
     Ok(())
 }
 
-
 const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
 pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
@@ -193,6 +202,28 @@ pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), 
     Ok(())
 }
 
+const UPDATE_PROJECT_LAST_COMMIT: &str = "update project set last_commit = ?1;";
+pub fn update_project_last_commit(last_commit: String) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(UPDATE_PROJECT_LAST_COMMIT, params![last_commit])
+        .expect("AAA");
+
+    Ok(())
+}
+
+const UPDATE_PROJECT_STATUS: &str = "update project set status = ?1 where id = ?2;";
+pub fn update_project_status(project: &Project) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    conn.execute(
+        UPDATE_PROJECT_STATUS,
+        params![format!("{}", project.status), project.id],
+    )
+    .expect("AAA");
+
+    Ok(())
+}
 ///
 const UPDATE_TMP: &str = "update tmp_git_config set is_selected = ?1 where path = ?2;";
 pub fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
@@ -203,8 +234,6 @@ pub fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
 
     Ok(())
 }
-
-
 
 /// WRITE TEMPORARY PROJECTS
 const INSERT_INTO_TMP: &str = "INSERT OR IGNORE INTO tmp_git_config (path) VALUES (?)";
@@ -246,6 +275,8 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
                 category: Category::Unknown,
                 status: ProjectStatus::Unstable,
                 is_git: true,
+                owner: "".to_owned(),
+                repo: "".to_owned(),
                 last_commit: "N/A".to_owned(),
             })
         })
