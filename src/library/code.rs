@@ -3,6 +3,7 @@ use crate::library::sql::{
     read_project,
     read_tmp,
     read_todo,
+    regex_last_dir,
     regex_repo, // TODO move regex repo to another folder
     update_project_category,
     update_project_desc,
@@ -201,26 +202,26 @@ impl App {
                     write_project(Project {
                         id: 0,
                         path: repo.clone(),
-                        name: regex_repo(repo.clone()),
+                        name: regex_last_dir(repo.clone()),
                         desc: "N/A".to_owned(),
                         category: Category::Unknown,
                         status: ProjectStatus::Unstable,
                         is_git: true,
                         owner: "quffaro".to_owned(), //TODO
-                        repo: repo.clone(),
+                        repo: regex_last_dir(repo.clone()),
                         last_commit: "N/A".to_owned(),
                     });
                 } else {
                     write_project(Project {
                         id: 0,
                         path: path.clone(),
-                        name: regex_repo(path.clone()),
+                        name: regex_last_dir(path.clone()),
                         desc: "N/A".to_owned(),
                         category: Category::Unknown,
                         status: ProjectStatus::Unstable,
                         is_git: false,
                         owner: "quffaro".to_owned(), //TODO
-                        repo: "".to_owned(),
+                        repo: "".to_owned(),         //TODO should be null sql
                         last_commit: "N/A".to_owned(),
                     });
                 }

@@ -108,7 +108,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 Input {
                     key: Key::Char('t'),
                     ..
-                } => app.popup(PopupWindow::AddTodo, None),
+                } => app.popup(PopupWindow::AddTodo, Some(Mode::Insert)),
                 Input {
                     key: Key::Char('p'),
                     ..
