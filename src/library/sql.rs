@@ -1,6 +1,7 @@
 use crate::library::code::{
     fetch_config_files, Category, GitConfig, Project, ProjectStatus, Todo, DATABASE,
 };
+// use git2::Repository::discover;
 use regex::Regex;
 use rusqlite::{params, Connection, Result};
 
@@ -78,6 +79,42 @@ pub fn read_project(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::
     res
 }
 
+/// READ PROJECTS FROM DB
+const READ_PROJECT_REPOS: &str =
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from project where repo is not null and owner is not null";
+pub fn read_project_repos(conn: Option<Connection>) -> Result<Vec<Project>, rusqlite::Error> {
+    let conn = match conn {
+        Some(c) => c,
+        None => Connection::open(DATABASE)?,
+    };
+
+    let mut stmt = conn.prepare(READ_PROJECT_REPOS)?;
+    let res = stmt
+        .query_map([], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                name: row.get(2)?,
+                desc: match row.get(3)? {
+                    Some(x) => x,
+                    None => "N/A".to_string(),
+                },
+                category: row.get(4)?,
+                status: row.get(5)?, // TODO is this the best way?
+                is_git: row.get(6)?,
+                owner: row.get(7)?,
+                repo: row.get(8)?,
+                last_commit: match row.get(9)? {
+                    Some(x) => x,
+                    None => "N/A".to_string(),
+                },
+            })
+        })
+        .expect("A!!")
+        .collect();
+
+    res
+}
 /// TODOs
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete from todo";
 pub fn read_todo(conn: Option<Connection>) -> Result<Vec<Todo>, rusqlite::Error> {
@@ -267,6 +304,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
 
     let tmp_project: Result<Vec<Project>, rusqlite::Error> = read_stmt
         .query_map([], |row| {
+            // TODO error handle git2 error for rusqlite
             Ok(Project {
                 id: 0,
                 path: row.get(0)?,
@@ -276,7 +314,7 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
                 status: ProjectStatus::Unstable,
                 is_git: true,
                 owner: "".to_owned(),
-                repo: "".to_owned(),
+                repo: find_repo(row.get(0)?),
                 last_commit: "N/A".to_owned(),
             })
         })
@@ -299,4 +337,13 @@ pub fn regex_repo(path: String) -> String {
     let caps = re.captures(&path).unwrap();
 
     caps.get(0).unwrap().as_str().to_string()
+}
+
+pub fn find_repo(path: String) -> String {
+    let result = match git2::Repository::discover(path) {
+        Ok(found) => found.workdir().unwrap().to_str().unwrap().to_string(),
+        Err(didnt) => "N/A".to_owned(),
+    };
+
+    result
 }

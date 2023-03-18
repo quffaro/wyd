@@ -185,7 +185,6 @@ impl App {
         }
     }
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
-        // write_project(Project::new_in_pwd()); // SQL
         match self.window {
             Window {
                 popup: PopupWindow::None,
@@ -194,23 +193,37 @@ impl App {
             } => {
                 // TODO discover the higher git repo
                 let path = env::current_dir().unwrap().display().to_string();
-                let repo = match git2::Repository::discover(path) {
-                    Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
-                    _ => "N/A".to_string(),
-                };
-                let name = regex_repo(repo.clone());
-                write_project(Project {
-                    id: 0,
-                    path: repo.clone(),
-                    name: name,
-                    desc: "N/A".to_owned(),
-                    category: Category::Unknown,
-                    status: ProjectStatus::Unstable,
-                    is_git: false,
-                    owner: "".to_owned(), //TODO
-                    repo: repo.clone(),
-                    last_commit: "N/A".to_owned(),
-                });
+                if is_find_git {
+                    let repo = match git2::Repository::discover(path) {
+                        Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+                        _ => "N/A".to_string(),
+                    };
+                    write_project(Project {
+                        id: 0,
+                        path: repo.clone(),
+                        name: regex_repo(repo.clone()),
+                        desc: "N/A".to_owned(),
+                        category: Category::Unknown,
+                        status: ProjectStatus::Unstable,
+                        is_git: true,
+                        owner: "quffaro".to_owned(), //TODO
+                        repo: repo.clone(),
+                        last_commit: "N/A".to_owned(),
+                    });
+                } else {
+                    write_project(Project {
+                        id: 0,
+                        path: path.clone(),
+                        name: regex_repo(path.clone()),
+                        desc: "N/A".to_owned(),
+                        category: Category::Unknown,
+                        status: ProjectStatus::Unstable,
+                        is_git: false,
+                        owner: "quffaro".to_owned(), //TODO
+                        repo: "".to_owned(),
+                        last_commit: "N/A".to_owned(),
+                    });
+                }
                 self.projects = TableItems::<Project>::load(None);
                 self.projects.select_state(Some(0));
             }

@@ -1,10 +1,10 @@
 use crate::library::code::Project;
-use crate::library::sql::update_project_last_commit;
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
 /// > owner (string)
 /// > repo (string)
+use crate::library::sql::{read_project_repos, update_project_last_commit};
 use reqwest::{header, ClientBuilder, Result};
 use serde::Deserialize;
 use std::fs;
@@ -17,20 +17,21 @@ struct Commit {
 }
 
 #[tokio::main]
-pub async fn request_string(project: &Project) -> Result<()> {
+pub async fn request_string() -> Result<()> {
+    let projects = read_project_repos(None).unwrap();
 
-    let request = request(project).await;
-    let string = request?.as_str().and_then(|x| Some(x.to_owned()));
-
-    // println!("{}", string.unwrap());
-    update_project_last_commit(string.unwrap());
+    for p in projects {
+        let request = request(&p).await;
+        let string = request?.as_str().and_then(|x| Some(x.to_owned()));
+        update_project_last_commit(string.unwrap());
+    }
 
     Ok(())
 }
 
 pub async fn request(project: &Project) -> Result<serde_json::Value> {
     // TODO this needs better error handling...
-    let mut secret = fs::read_to_string("../pat/wyd_pat.txt").expect("A");
+    let mut secret = fs::read_to_string("pat.txt").expect("A");
     secret.pop();
 
     let mut headers = header::HeaderMap::new();
@@ -49,6 +50,7 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
         owner = project.owner,
         repo = project.repo,
     );
+    // println!("{:#?}", request_url);
 
     // let timeout = Duration::new(5, 0);
     // let handle = SpinnerBuilder::new()
