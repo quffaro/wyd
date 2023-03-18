@@ -1,3 +1,4 @@
+use crate::library::gitconfig::guess_git_owner;
 use crate::library::sql::{
     initialize_db,
     read_project,
@@ -9,6 +10,7 @@ use crate::library::sql::{
     update_project_desc,
     update_project_status,
     update_tmp,
+    update_todo,
     write_new_todo,
     write_project,
     write_tmp_to_project,
@@ -34,6 +36,7 @@ use tui_textarea::{Input, Key, TextArea};
 pub const DATABASE: &str = "projects.db";
 pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/";
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
+pub const SUBPATH_GIT_CONFIG: &str = "/.git/config";
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 pub const SUB_HOME_FOLDER: &str = "/Documents/";
 
@@ -207,7 +210,7 @@ impl App {
                         category: Category::Unknown,
                         status: ProjectStatus::Unstable,
                         is_git: true,
-                        owner: "quffaro".to_owned(), //TODO
+                        owner: guess_git_owner(repo.clone()), //TODO
                         repo: regex_last_dir(repo.clone()),
                         last_commit: "N/A".to_owned(),
                     });
@@ -624,7 +627,7 @@ impl FilteredListItems<Todo> {
         for i in 0..self.filtered.len() {
             if i == selected {
                 self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                // TODO update_todo(&self.filtered[i]).expect("msg");
+                update_todo(&self.filtered[i]).expect("msg");
             } else {
                 continue;
             }

@@ -272,6 +272,32 @@ pub fn update_tmp(tmp: &GitConfig) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+const UPDATE_TODO: &str = "insert or replace into todo (
+    id,
+    parent_id,
+    project_id,
+    todo,
+    is_complete
+) values (?1, ?2, ?3, ?4, ?5);";
+pub fn update_todo(todo: &Todo) -> Result<(), rusqlite::Error> {
+    let conn = Connection::open(DATABASE)?;
+
+    let mut write_stmt = conn.prepare(UPDATE_TODO)?;
+    write_stmt
+        .execute(params![
+            todo.id,
+            todo.parent_id,
+            todo.project_id,
+            todo.todo.as_str(),
+            match todo.is_complete {
+                true => true,
+                _ => false,
+            },
+        ])
+        .expect("AAA!");
+
+    Ok(())
+}
 /// WRITE TEMPORARY PROJECTS
 const INSERT_INTO_TMP: &str = "INSERT OR IGNORE INTO tmp_git_config (path) VALUES (?)";
 pub fn write_tmp(tmp: Vec<String>) -> Result<(), rusqlite::Error> {

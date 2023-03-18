@@ -5,7 +5,7 @@
 // TODO ui folder
 use crate::library::code::{
     App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
-    SEARCH_DIRECTORY_PREFIX, SUB_HOME_FOLDER,
+    SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
 };
 use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
@@ -71,6 +71,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         })?;
 
         // app.input(&mut textarea);
+        // TODO i would like for this to be in its own rule
         match app.window {
             Window {
                 popup: PopupWindow::None,
@@ -100,7 +101,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 Input {
                     key: Key::Char('e'),
                     ..
-                } => app.popup(PopupWindow::EditDesc, None),
+                } => app.popup(PopupWindow::EditDesc, Some(Mode::Insert)),
                 Input {
                     key: Key::Char('r'),
                     ..
@@ -132,12 +133,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     key: Key::Char('l'),
                     ..
                 }
-                | Input { key: Key::Up, .. } => app.next(),
+                | Input { key: Key::Up, .. } => app.previous(),
                 Input {
                     key: Key::Char('k'),
                     ..
                 }
-                | Input { key: Key::Down, .. } => app.previous(),
+                | Input { key: Key::Down, .. } => app.next(),
                 _ => {}
             },
             Window {
@@ -169,6 +170,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         )
         .split(size);
 
+    // TODO wrap this into a rule
     let pwd = current_dir()
         .unwrap()
         .into_os_string()
@@ -223,7 +225,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     Block::default()
                         .borders(Borders::ALL)
                         .style(Style::default().fg(app.window.mode_color()))
-                        .title(format!("Add task for {}", p.id)),
+                        .title(format!("Add task for {}", p.name)),
                 );
                 let widget = textarea.widget();
                 rect.render_widget(widget, area);
@@ -356,6 +358,10 @@ fn render_popup_help_table<'a>(app: &App) -> Table<'a> {
         Row::new(vec![Cell::from("h"), Cell::from("help")]),
         Row::new(vec![Cell::from("a"), Cell::from("add project in pwd")]),
         Row::new(vec![
+            Cell::from("A"),
+            Cell::from("add project if it is a git project"),
+        ]),
+        Row::new(vec![
             Cell::from("p"),
             Cell::from("recursively search for git configs in Documents"),
         ]),
@@ -416,7 +422,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 Cell::from(
                     p.name
                         .replace(&home_dir, "...")
-                        .replace("/.git/config", "") // TODO into constant
+                        .replace(SUBPATH_GIT_CONFIG, "") // TODO into constant
                         .clone(),
                 ),
                 Cell::from(p.category.to_string().clone()),
