@@ -1,6 +1,7 @@
 use crate::library::code::{
     fetch_config_files, Category, GitConfig, Project, ProjectStatus, Todo, DATABASE,
 };
+use crate::library::gitconfig::guess_git_owner;
 // use git2::Repository::discover;
 use regex::Regex;
 use rusqlite::{params, Connection, Result};
@@ -322,7 +323,7 @@ pub fn init_tmp_git_config() -> Result<(), rusqlite::Error> {
 // const READ_TMP_SELECTED: &str    = "select path from tmp_git_config where is_selected = 1";
 const READ_TMP_SELECTED: &str = "select path from tmp_git_config where is_selected = 1 and path not in (select path from project)";
 const WRITE_TMP_TO_PROJECT: &str =
-    "insert or replace into project (path,name,cat,status,is_git) values (?1, ?2, ?3, ?4,1);";
+    "insert or replace into project (path,name,cat,status,is_git,owner,repo) values (?1, ?2, ?3, ?4,?5,?6,?7);";
 pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
@@ -334,13 +335,13 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
             Ok(Project {
                 id: 0,
                 path: row.get(0)?,
-                name: regex_repo(row.get(0)?),
+                name: regex_last_dir(row.get(0)?),
                 desc: "Example".to_owned(),
                 category: Category::Unknown,
                 status: ProjectStatus::Unstable,
                 is_git: true,
-                owner: "".to_owned(),
-                repo: find_repo(row.get(0)?),
+                owner: guess_git_owner(row.get(0)?),
+                repo: regex_last_dir(row.get(0)?),
                 last_commit: "N/A".to_owned(),
             })
         })
@@ -350,7 +351,15 @@ pub fn write_tmp_to_project() -> Result<(), rusqlite::Error> {
     let mut write_stmt = conn.prepare(WRITE_TMP_TO_PROJECT)?;
     for x in tmp_project? {
         write_stmt
-            .execute([x.path, x.name, x.category.to_string(), x.status.to_string()])
+            .execute([
+                x.path,
+                x.name,
+                x.category.to_string(),
+                x.status.to_string(),
+                1.to_string(),
+                x.owner,
+                x.repo,
+            ])
             .expect("AAA!");
     }
 

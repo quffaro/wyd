@@ -36,7 +36,7 @@ use tui_textarea::{Input, Key, TextArea};
 pub const DATABASE: &str = "projects.db";
 pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/";
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
-pub const SUBPATH_GIT_CONFIG: &str = "/.git/config";
+pub const SUBPATH_GIT_CONFIG: &str = ".git/config";
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 pub const SUB_HOME_FOLDER: &str = "/Documents/";
 
@@ -54,7 +54,7 @@ pub fn fetch_config_files() -> Vec<String> {
             x.into_os_string()
                 .into_string()
                 .unwrap()
-                .replace(CONFIG_PATH_SUFFIX, "")
+                .replace(SUBPATH_GIT_CONFIG, "")
         })
         .collect();
 
