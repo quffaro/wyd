@@ -14,6 +14,7 @@ use crate::library::sql::{
     write_new_todo,
     write_project,
     write_tmp_to_project,
+    read_category,
 };
 use glob::glob;
 use rusqlite::{
@@ -62,33 +63,39 @@ pub fn fetch_config_files() -> Vec<String> {
 }
 
 /// APP
-pub struct App {
+pub struct App<'a> {
     pub message: String,
     pub window: Window,
+    pub conn: &'a Connection,
     pub configs: TableItems<GitConfig>,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
     pub categories: ListItems<Category>,
 }
 
-impl App {
-    fn load(conn: Option<Connection>) -> App {
+impl<'a> App<'a> {
+    // pub fn init() -> App {
+    //     // INITIALIZE DB
+    //     let conn = Connection::open(DATABASE).unwrap();
+    //     App::load(&conn)
+    // }
+    pub fn load(conn: &'a Connection) -> App {
+
+        initialize_db(conn);
         App {
             message: "hiii".to_owned(),
             window: Window::new(),
-            configs: TableItems::<GitConfig>::load(),
-            projects: TableItems::<Project>::load(conn),
-            todos: FilteredListItems::<Todo>::load(None),
-            categories: ListItems::<Category>::new(),
+            conn: &conn,
+            configs: TableItems::<GitConfig>::load(&conn),
+            projects: TableItems::<Project>::load(&conn),
+            todos: FilteredListItems::<Todo>::load(&conn),
+            categories: ListItems::<Category>::load(&conn),
         }
     }
-    pub fn init() -> App {
-        let conn = Connection::open(DATABASE).unwrap();
-        // INITIALIZE DB
-        initialize_db();
+}
 
-        App::load(Some(conn))
-    }
+impl App<'_> {
+    
     pub fn next(&mut self) {
         match self.window {
             Window {
@@ -188,52 +195,7 @@ impl App {
             None => (),
         }
     }
-    pub fn add_project_in_dir(&mut self, is_find_git: bool) {
-        match self.window {
-            Window {
-                popup: PopupWindow::None,
-                base: BaseWindow::Project,
-                ..
-            } => {
-                // TODO discover the higher git repo
-                let path = env::current_dir().unwrap().display().to_string();
-                if is_find_git {
-                    let repo = match git2::Repository::discover(path) {
-                        Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
-                        _ => "N/A".to_string(),
-                    };
-                    write_project(Project {
-                        id: 0,
-                        path: repo.clone(),
-                        name: regex_last_dir(repo.clone()),
-                        desc: "N/A".to_owned(),
-                        category: Category::Unknown,
-                        status: ProjectStatus::Unstable,
-                        is_git: true,
-                        owner: guess_git_owner(repo.clone()), //TODO
-                        repo: regex_last_dir(repo.clone()),
-                        last_commit: "N/A".to_owned(),
-                    });
-                } else {
-                    write_project(Project {
-                        id: 0,
-                        path: path.clone(),
-                        name: regex_last_dir(path.clone()),
-                        desc: "N/A".to_owned(),
-                        category: Category::Unknown,
-                        status: ProjectStatus::Unstable,
-                        is_git: false,
-                        owner: "quffaro".to_owned(), //TODO
-                        repo: "".to_owned(),         //TODO should be null sql
-                        last_commit: "N/A".to_owned(),
-                    });
-                }
-                self.projects = TableItems::<Project>::load(None);
-                self.projects.select_state(Some(0));
-            }
-            _ => {}
-        }
-    }
+    
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
         self.window.popup = popup;
@@ -306,7 +268,7 @@ impl App {
                     Some(p) => p.id,
                     None => 0,
                 };
-                write_new_todo(vec![Todo {
+                write_new_todo(&self.conn, vec![Todo {
                     id: 0,
                     parent_id: 0,
                     project_id: project_id,
@@ -314,14 +276,14 @@ impl App {
                     is_complete: false,
                 }]);
 
-                self.todos = FilteredListItems::<Todo>::load(None);
+                self.todos = FilteredListItems::<Todo>::load(&self.conn);
                 self.todos.select_filter_state(Some(0), project_id);
             }
             PopupWindow::EditDesc => match self.projects.current_state() {
                 (Some(idx), Some(p)) => {
-                    update_project_desc(p, content).expect("A");
+                    update_project_desc(&self.conn, p, content).expect("A");
                     // reload projects but retain selection
-                    self.projects = TableItems::<Project>::load(None);
+                    self.projects = TableItems::<Project>::load(&self.conn);
                     self.projects.select_state(Some(idx));
                 }
                 _ => (),
@@ -329,17 +291,26 @@ impl App {
             PopupWindow::EditCategory => match self.projects.current_state() {
                 (Some(idx), Some(p)) => match self.categories.current() {
                     Some(cat) => {
-                        update_project_category(p, cat);
-                        self.projects = TableItems::<Project>::load(None);
+                        let name = &cat.name;
+                        update_project_category(&self.conn, p, name.to_owned());
+                        self.projects = TableItems::<Project>::load(&self.conn);
                         self.projects.select_state(Some(idx));
                     }
                     _ => {}
                 },
                 _ => (),
             },
+            PopupWindow::NewCategory => match self.projects.current_state() {
+                (Some(idx), Some(p)) => {
+                    update_project_category(&self.conn, p, content).expect("BBB!");
+                    self.projects = TableItems::<Project>::load(&self.conn);
+                    self.projects.select_state(Some(idx));
+                },
+                _ => (),
+            }
             PopupWindow::SearchGitConfig => {
-                write_tmp_to_project();
-                self.projects = TableItems::<Project>::load(None);
+                write_tmp_to_project(&self.conn);
+                self.projects = TableItems::<Project>::load(&self.conn);
                 self.projects.select_state(Some(0));
             }
             _ => (),
@@ -352,23 +323,23 @@ impl App {
                 popup: PopupWindow::None,
                 base: BaseWindow::Project,
                 ..
-            } => self.projects.toggle(),
+            } => self.projects.toggle(&self.conn),
             Window {
                 popup: PopupWindow::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.todos.toggle(),
+            } => self.todos.toggle(&self.conn),
             Window {
                 popup: PopupWindow::SearchGitConfig,
                 base: _,
                 ..
-            } => self.configs.toggle(),
+            } => self.configs.toggle(&self.conn),
             Window {
                 popup: PopupWindow::EditCategory,
                 base: _,
                 ..
             } => match self.projects.current() {
-                Some(p) => self.categories.toggle(p),
+                Some(p) => self.categories.toggle(&self.conn, p),
                 None => {}
             },
             _ => {}
@@ -376,6 +347,52 @@ impl App {
     }
 
     pub fn delete_todo(&mut self) {}
+    pub fn add_project_in_dir(&mut self, is_find_git: bool) {
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => {
+                // TODO discover the higher git repo
+                let path = env::current_dir().unwrap().display().to_string();
+                if is_find_git {
+                    let repo = match git2::Repository::discover(path) {
+                        Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+                        _ => "N/A".to_string(),
+                    };
+                    write_project(&self.conn, Project {
+                        id: 0,
+                        path: repo.clone(),
+                        name: regex_last_dir(repo.clone()),
+                        desc: "N/A".to_owned(),
+                        category: "Unknown".to_owned(),
+                        status: ProjectStatus::Unstable,
+                        is_git: true,
+                        owner: guess_git_owner(repo.clone()), //TODO
+                        repo: regex_last_dir(repo.clone()),
+                        last_commit: "N/A".to_owned(),
+                    });
+                } else {
+                    write_project(&self.conn, Project {
+                        id: 0,
+                        path: path.clone(),
+                        name: regex_last_dir(path.clone()),
+                        desc: "N/A".to_owned(),
+                        category:  "Unknown".to_owned(),
+                        status: ProjectStatus::Unstable,
+                        is_git: false,
+                        owner: "quffaro".to_owned(), //TODO
+                        repo: "".to_owned(),         //TODO should be null sql
+                        last_commit: "N/A".to_owned(),
+                    });
+                }
+                self.projects = TableItems::<Project>::load(&self.conn);
+                self.projects.select_state(Some(0));
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -384,7 +401,7 @@ pub struct Project {
     pub path: String,
     pub name: String,
     pub desc: String,
-    pub category: Category,
+    pub category: String,
     pub status: ProjectStatus,
     pub is_git: bool,
     pub owner: String,
@@ -393,7 +410,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn load(conn: Option<Connection>) -> Vec<Project> {
+    pub fn load(conn: &Connection) -> Vec<Project> {
         read_project(conn).expect("READ PROJECT ERROR")
         // vec![]
     }
@@ -405,7 +422,7 @@ impl Project {
             path: current_dir.clone(),
             name: name,
             desc: "".to_owned(),
-            category: Category::Unknown,
+            category:  "Unknown".to_owned(),
             status: ProjectStatus::Unstable,
             is_git: false,
             owner: "".to_owned(), //TODO
@@ -414,18 +431,18 @@ impl Project {
         }
     }
     // TODO this is
-    pub fn cycle_status(&mut self) {
+    pub fn cycle_status(&mut self, conn: &Connection) {
         self.status = match self.status {
             ProjectStatus::Stable => ProjectStatus::Unstable,
             ProjectStatus::Unstable => ProjectStatus::Stable,
         };
         // TODO we need to write this
-        update_project_status(self);
-    }
+        update_project_status(conn, self);
+    } 
 }
 
 impl TableItems<Project> {
-    pub fn load(conn: Option<Connection>) -> TableItems<Project> {
+    pub fn load(conn: &Connection) -> TableItems<Project> {
         TableItems {
             items: Project::load(conn),
             state: TableState::default(),
@@ -451,11 +468,11 @@ impl TableItems<Project> {
             None => (None, None),
         }
     }
-    pub fn toggle(&mut self) {
+    pub fn toggle(&mut self, conn: &Connection) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                self.items[i].cycle_status();
+                self.items[i].cycle_status(conn);
             } else {
                 continue;
             }
@@ -579,26 +596,26 @@ pub struct GitConfig {
 }
 
 impl GitConfig {
-    pub fn load() -> Vec<GitConfig> {
+    pub fn load(conn: &Connection) -> Vec<GitConfig> {
         // TODO unwrap
-        read_tmp(None).unwrap()
+        read_tmp(conn).unwrap()
         // vec![]
     }
 }
 
 impl TableItems<GitConfig> {
-    pub fn load() -> TableItems<GitConfig> {
+    pub fn load(conn: &Connection) -> TableItems<GitConfig> {
         TableItems {
-            items: GitConfig::load(),
+            items: GitConfig::load(conn),
             state: TableState::default(),
         }
     }
-    pub fn toggle(&mut self) {
+    pub fn toggle(&mut self, conn: &Connection) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
-                update_tmp(&self.items[i]); // TODO
+                update_tmp(conn,&self.items[i]); // TODO
             } else {
                 continue;
             }
@@ -617,7 +634,7 @@ pub struct Todo {
 }
 
 impl FilteredListItems<Todo> {
-    pub fn load(conn: Option<Connection>) -> FilteredListItems<Todo> {
+    pub fn load(conn: &Connection) -> FilteredListItems<Todo> {
         FilteredListItems {
             items: read_todo(conn).expect("AA"),
             filtered: vec![],
@@ -630,12 +647,12 @@ impl FilteredListItems<Todo> {
             .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
     }
     // TODO can this be a method for ListNavigate?
-    pub fn toggle(&mut self) {
+    pub fn toggle(&mut self, conn: &Connection) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.filtered.len() {
             if i == selected {
                 self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                update_todo(&self.filtered[i]).expect("msg");
+                update_todo(conn, &self.filtered[i]).expect("msg");
             } else {
                 continue;
             }
@@ -657,7 +674,6 @@ impl FilteredListItems<Todo> {
 
 /// ENUMS
 /// WINDOWS
-
 pub struct Window {
     pub base: BaseWindow,
     pub popup: PopupWindow,
@@ -737,6 +753,7 @@ pub enum PopupWindow {
     AddTodo,
     EditCategory,
     EditDesc,
+    NewCategory,
     Help,
 }
 
@@ -758,13 +775,10 @@ pub enum WindowStatus {
     NotLoaded,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, EnumString, EnumIter)]
-pub enum Category {
-    Unknown,
-    Math,
-    Haskell,
-    OCaml,
-    Rust,
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Category {
+    pub id: u8,
+    pub name: String,
 }
 
 impl fmt::Display for Category {
@@ -773,19 +787,25 @@ impl fmt::Display for Category {
     }
 }
 
-impl FromSql for Category {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<Category>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
+impl Category {
+    pub fn load(conn: &Connection) -> Vec<Category> {
+        read_category(conn).expect("READ CATEGORY ERROR")
     }
 }
 
+// impl FromSql for Category {
+//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+//         value
+//             .as_str()?
+//             .parse::<String>()
+//             .map_err(|e| FromSqlError::Other(Box::new(e)))
+//     }
+// }
+
 impl ListItems<Category> {
-    pub fn new() -> ListItems<Category> {
+    pub fn load(conn: &Connection) -> ListItems<Category> {
         ListItems {
-            items: Category::iter().collect(),
+            items: Category::load(conn),
             state: ListState::default(),
         }
     }
@@ -796,11 +816,11 @@ impl ListItems<Category> {
             None => None,
         }
     }
-    pub fn toggle(&mut self, project: &Project) {
+    pub fn toggle(&mut self, conn: &Connection, project: &Project) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                update_project_category(project, &self.items[i]);
+                update_project_category(conn, project, self.items[i].name.to_owned()); // TODO not the best!
             } else {
                 continue;
             }
