@@ -133,12 +133,20 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     key: Key::Char('l'),
                     ..
                 }
-                | Input { key: Key::Up, .. } => app.previous(),
+                | Input { key: Key::Up, .. }
+                | Input {
+                    key: Key::MouseScrollUp,
+                    ..
+                } => app.previous(),
                 Input {
                     key: Key::Char('k'),
                     ..
                 }
-                | Input { key: Key::Down, .. } => app.next(),
+                | Input { key: Key::Down, .. }
+                | Input {
+                    key: Key::MouseScrollDown,
+                    ..
+                } => app.next(),
                 _ => {}
             },
             Window {
