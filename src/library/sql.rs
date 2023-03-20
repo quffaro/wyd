@@ -240,11 +240,14 @@ pub fn update_project_category(project: &Project, cat: &Category) -> Result<(), 
     Ok(())
 }
 
-const UPDATE_PROJECT_LAST_COMMIT: &str = "update project set last_commit = ?1;";
-pub fn update_project_last_commit(last_commit: String) -> Result<(), rusqlite::Error> {
+const UPDATE_PROJECT_LAST_COMMIT: &str = "update project set last_commit = ?1 where id = ?2;";
+pub fn update_project_last_commit(
+    project: &Project,
+    last_commit: String,
+) -> Result<(), rusqlite::Error> {
     let conn = Connection::open(DATABASE)?;
 
-    conn.execute(UPDATE_PROJECT_LAST_COMMIT, params![last_commit])
+    conn.execute(UPDATE_PROJECT_LAST_COMMIT, params![last_commit, project.id])
         .expect("AAA");
 
     Ok(())

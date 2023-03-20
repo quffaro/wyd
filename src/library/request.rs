@@ -7,6 +7,7 @@ use crate::library::code::Project;
 use crate::library::sql::{read_project_repos, update_project_last_commit};
 use reqwest::{header, ClientBuilder, Result};
 use serde::Deserialize;
+use serde_json::json;
 use std::fs;
 
 use tokio;
@@ -21,9 +22,8 @@ pub async fn request_string() -> Result<()> {
     let projects = read_project_repos(None).unwrap();
 
     for p in projects {
-        let request = request(&p).await;
-        let string = request?.as_str().and_then(|x| Some(x.to_owned()));
-        update_project_last_commit(string.unwrap());
+        let request = request(&p).await?.as_str().and_then(|x| Some(x.to_owned()));
+        update_project_last_commit(&p, request.unwrap());
     }
 
     Ok(())
@@ -40,23 +40,17 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
     headers.insert(header::AUTHORIZATION, auth_value);
     headers.insert(
         header::USER_AGENT,
-        header::HeaderValue::from_str("quffaro").unwrap(),
+        header::HeaderValue::from_str("quffaro").unwrap(), // TODO this should be your github user
     );
     // TODO use user_agent function?
 
-    // println!("{:#?}", headers);
     let request_url = format!(
         "https://api.github.com/repos/{owner}/{repo}/commits",
         owner = project.owner,
         repo = project.repo,
     );
-    // println!("{:#?}", request_url);
 
     // let timeout = Duration::new(5, 0);
-    // let handle = SpinnerBuilder::new()
-    //     .spinner(&DOTS)
-    //     .text("Loading...")
-    //     .start();
     let client = ClientBuilder::new()
         .default_headers(headers)
         // .timeout(timeout)
@@ -70,20 +64,15 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
         .json::<serde_json::Value>()
         .await?;
     // handle.done();
-    // println!("{:#?}", response);
 
-    // TODO we need error handling!!!
     let result = response
         .get(0)
         .and_then(|v| v.get("commit"))
         .and_then(|v| v.get("committer"))
         .and_then(|v| v.get("date"))
-        .unwrap();
-    // TODO map as_str through option?
+        .unwrap_or(&json!("N/A"))
+        .to_owned();
 
-    // println!("{:#?}", result);
-    Ok(result).cloned()
-    // .cloned()
+    Ok(result)
     //UTC time, ISO 8601
-    // Ok(())
 }

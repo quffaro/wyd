@@ -282,8 +282,16 @@ impl App {
                 self.popup_write_and_close(textarea, popup);
                 *textarea = TextArea::default();
             }
-            Input { key: Key::Down, .. } => self.next(),
-            Input { key: Key::Up, .. } => self.previous(),
+            Input { key: Key::Down, .. }
+            | Input {
+                key: Key::MouseScrollDown,
+                ..
+            } => self.next(),
+            Input { key: Key::Up, .. }
+            | Input {
+                key: Key::MouseScrollUp,
+                ..
+            } => self.previous(),
             Input {
                 key: Key::Enter, ..
             } => self.toggle(),
