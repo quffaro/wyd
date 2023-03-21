@@ -1,5 +1,5 @@
 use crate::library::code::{
-    fetch_config_files, Category, GitConfig, Project, ProjectStatus, Todo, DATABASE,
+    fetch_config_files, Category, GitConfig, Project, ProjectStatus, Todo, IN_HOME_DATABASE, home_path
 };
 use crate::library::gitconfig::guess_git_owner;
 // use git2::Repository::discover;
@@ -323,7 +323,7 @@ pub fn write_tmp(conn: &Connection, tmp: Vec<String>) -> Result<(), rusqlite::Er
 }
 
 pub fn init_tmp_git_config() -> Result<(), rusqlite::Error> {
-    let conn = Connection::open(DATABASE).unwrap();
+    let conn = Connection::open(home_path(IN_HOME_DATABASE)).unwrap();
     let tmp = fetch_config_files();
     write_tmp(&conn,tmp);
 
