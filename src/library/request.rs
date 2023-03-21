@@ -1,16 +1,16 @@
-use crate::library::code::{DATABASE, Project};
+use crate::library::code::{Project, IN_HOME_DATABASE, home_path};
+use crate::library::sql::{read_project_repos, update_project_last_commit};
+use dirs::home_dir;
+use reqwest::{header, ClientBuilder, Result};
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
 /// > owner (string)
 /// > repo (string)
 use rusqlite::Connection;
-use crate::library::sql::{read_project_repos, update_project_last_commit};
-use reqwest::{header, ClientBuilder, Result};
 use serde::Deserialize;
 use serde_json::json;
 use std::fs;
-
 use tokio;
 
 #[derive(Deserialize, Debug)]
@@ -20,7 +20,7 @@ struct Commit {
 
 #[tokio::main]
 pub async fn request_string() -> Result<()> {
-    let conn = Connection::open(DATABASE).unwrap();
+    let conn = Connection::open(home_path(IN_HOME_DATABASE)).unwrap();
     let projects = read_project_repos(&conn).unwrap();
 
     for p in projects {

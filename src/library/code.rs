@@ -1,3 +1,4 @@
+use crate::library::config::{init_config, load_config};
 use crate::library::gitconfig::guess_git_owner;
 use crate::library::sql::{
     initialize_db,
@@ -17,6 +18,7 @@ use crate::library::sql::{
     write_project,
     write_tmp_to_project,
 };
+use dirs::home_dir;
 use glob::glob;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
@@ -30,17 +32,27 @@ use strum_macros::{EnumIter, EnumString};
 use tui::style::Color;
 use tui::widgets::{List, ListState, TableState};
 use tui_textarea::{Input, Key, TextArea};
-
-// use super::new_sql::update_project_category;
+// const
 
 /// SQL
 /// // TODO needs ot be dynamic
-pub const DATABASE: &str = "projects.db";
+
+pub const IN_HOME_CONFIG: &str = "/.config/wyd/config";
+pub const IN_HOME_DATABASE: &str = "/.config/wyd/projects.db";
+pub const DEFAULT_IN_HOME_SEARCH: &str = "/Documents";
+///
+// pub const DATABASE: &str = "projects.db";
 pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/";
 pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
 pub const SUBPATH_GIT_CONFIG: &str = ".git/config";
 pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
 pub const SUB_HOME_FOLDER: &str = "/Documents/";
+
+pub fn home_path(path: &str) -> String {
+    let home = home_dir().unwrap().into_os_string().into_string().unwrap();
+
+    format!("{}{}", home, path)
+}
 
 /// UI
 pub const HIGHLIGHT_SYMBOL: &str = ">> ";
@@ -67,6 +79,7 @@ pub fn fetch_config_files() -> Vec<String> {
 pub struct App<'a> {
     pub message: String,
     pub window: Window,
+    pub config: Option<Config>,
     pub conn: &'a Connection,
     pub configs: TableItems<GitConfig>,
     pub projects: TableItems<Project>,
@@ -82,15 +95,23 @@ impl<'a> App<'a> {
     // }
     pub fn load(conn: &'a Connection) -> App {
         initialize_db(conn);
-        App {
+        // TODO initialize config
+        let mut app = App {
             message: "hiii".to_owned(),
-            window: Window::new(),
+            window: Window::new(false),
+            config: None,
             conn: &conn,
             configs: TableItems::<GitConfig>::load(&conn),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
             categories: ListItems::<Category>::load(&conn),
+        };
+        match load_config() {
+            Some(config) => app.config = Some(config),
+            None => app.window.popup = PopupWindow::Config,
         }
+
+        app
     }
 }
 
@@ -185,12 +206,12 @@ impl App<'_> {
     }
     pub fn cycle_popup(&mut self) {
         match self.window.popup {
-            PopupWindow::EditCategory => { 
-                self.window.popup = PopupWindow::NewCategory; 
+            PopupWindow::EditCategory => {
+                self.window.popup = PopupWindow::NewCategory;
                 self.window.mode = Mode::Insert;
             }
-            PopupWindow::NewCategory => { 
-                self.window.popup = PopupWindow::EditCategory; 
+            PopupWindow::NewCategory => {
+                self.window.popup = PopupWindow::EditCategory;
                 self.window.mode = Mode::Normal;
             }
             _ => {}
@@ -289,6 +310,11 @@ impl App<'_> {
     pub fn popup_write_and_close(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
         let content = textarea.lines().join("\n").to_owned();
         match popup {
+            PopupWindow::Config => init_config(Config {
+                owner: content,
+                search_folder: home_path(DEFAULT_IN_HOME_SEARCH),
+                db: home_path(IN_HOME_DATABASE),
+            }),
             PopupWindow::AddTodo => {
                 let project_id = match self.projects.current() {
                     Some(p) => p.id,
@@ -719,10 +745,14 @@ pub struct Window {
 }
 
 impl Window {
-    fn new() -> Window {
+    fn new(needs_config: bool) -> Window {
         Window {
             base: BaseWindow::Project,
-            popup: PopupWindow::None,
+            popup: if needs_config {
+                PopupWindow::Config
+            } else {
+                PopupWindow::None
+            },
             status: WindowStatus::NotLoaded,
             mode: Mode::Insert,
         }
@@ -737,7 +767,7 @@ impl Window {
         match self {
             Window {
                 popup: PopupWindow::None,
-                base: window,
+                base: _,
                 ..
             } => Color::Yellow,
             _ => Color::White,
@@ -792,6 +822,7 @@ pub enum PopupWindow {
     EditDesc,
     NewCategory,
     Help,
+    Config,
 }
 
 impl ListItems<PopupWindow> {
@@ -899,4 +930,10 @@ impl FromSql for ProjectStatus {
             .parse::<ProjectStatus>()
             .map_err(|e| FromSqlError::Other(Box::new(e)))
     }
+}
+
+pub struct Config {
+    pub owner: String,
+    pub search_folder: String,
+    pub db: String,
 }

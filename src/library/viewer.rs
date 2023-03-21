@@ -4,11 +4,12 @@
 // TODO Oso
 // TODO ui folder
 use crate::library::code::{
-    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, DATABASE,
+    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, IN_HOME_DATABASE, home_path,
     HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
 };
 use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
+use crate::library::config::init_config;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -18,6 +19,7 @@ use dirs::home_dir;
 use rusqlite::Connection;
 use std::env::current_dir;
 use std::io;
+use tui::text::Text;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -28,6 +30,7 @@ use tui::{
     Frame, Terminal,
 };
 use tui_textarea::{Input, Key, TextArea};
+use tui_tree_widget;
 // use tokio::task;
 use std::thread::{self, current};
 
@@ -40,7 +43,7 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // App
-    let conn = Connection::open(DATABASE).unwrap();
+    let conn = Connection::open(home_path(IN_HOME_DATABASE)).unwrap();
     let app = App::load(&conn);
     let _res = run_app(&mut terminal, app);
 
@@ -61,8 +64,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     app.default_select();
 
     // TODO passing the same connection is unsafe.
-    thread::spawn(|| init_tmp_git_config());
-    thread::spawn(|| request_string());
+    // TODO run if there is a config file
+    match app.config {
+        Some(_) => {
+            thread::spawn(|| init_tmp_git_config());
+            thread::spawn(|| request_string());
+        }
+        None => {}
+    }
 
     let mut textarea = TextArea::default();
 
@@ -190,7 +199,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .into_os_string()
         .into_string()
         .unwrap();
-    let title = Paragraph::new(pwd)
+    let title = Paragraph::new(format!("{} - {}", "hiii", pwd))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -229,6 +238,26 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
 
     // POPUP
     match app.window.popup {
+        PopupWindow::Config => {
+            let size = rect.size();
+            let area = centered_rect(40, 10, size);
+            rect.render_widget(Clear, area);
+
+            let (owner, directory) = centered_rect_config(40, 10, size);
+
+            // OWNER
+            textarea.set_block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().fg(app.window.mode_color()))
+                    .title("Github Name"),
+            );
+
+            // SEARCH DIRECTORY
+            let widget = textarea.widget();
+            rect.render_widget(widget, area);
+
+        }
         PopupWindow::AddTodo => match project {
             Some(p) => {
                 let size = rect.size();
@@ -453,11 +482,12 @@ fn render_popup_help_table<'a>(app: &App) -> Table<'a> {
 
 // render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
-    let home_dir = format!(
-        "{}{}",
-        home_dir().unwrap().into_os_string().into_string().unwrap(),
-        SUB_HOME_FOLDER
-    );
+    let home_dir = home_path(SUB_HOME_FOLDER);
+    // format!(
+    //     "{}{}",
+    //     home_dir().unwrap().into_os_string().into_string().unwrap(),
+    //     SUB_HOME_FOLDER
+    // );
     let rows: Vec<Row> = app
         .projects
         .items
@@ -693,6 +723,39 @@ fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect, Rec
     let y = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(85), Constraint::Length(15)])
+        .split(popup);
+
+    (y[0], y[1])
+}
+
+fn centered_rect_config(percent_x: u16, percent_y: u16, r: Rect) -> (Rect, Rect) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    let popup = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1];
+
+    let y = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(85), Constraint::Percentage(15)])
         .split(popup);
 
     (y[0], y[1])
