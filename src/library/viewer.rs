@@ -4,8 +4,8 @@
 // TODO Oso
 // TODO ui folder
 use crate::library::code::{
-    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
-    SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER, DATABASE,
+    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, DATABASE,
+    HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
 };
 use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
@@ -285,41 +285,23 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 rect.render_widget(msg, area);
             }
         },
-        PopupWindow::NewCategory => match project {
+        PopupWindow::NewCategory | PopupWindow::EditCategory => match project {
             Some(p) => {
-                let size = rect.size();
-                let area = centered_rect(40, 10, size);
-                rect.render_widget(Clear, area);
-
-                textarea.set_block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .style(Style::default().fg(app.window.mode_color()))
-                        .title(format!("(new category for {})", p.id)),
-                );
-                let widget = textarea.widget();
-                rect.render_widget(widget, area);
-            }
-            None => {
                 let size = rect.size();
                 let area = centered_rect(40, 40, size);
                 rect.render_widget(Clear, area);
 
-                let msg = Paragraph::new("No project selected".to_owned());
-                rect.render_widget(msg, area);
-            }
-        }
-        PopupWindow::EditCategory => match project {
-            Some(_) => {
-                let size = rect.size();
-                let clear = centered_rect(40, 40, size);
-                rect.render_widget(Clear, clear);
-
-                let (area, input) = centered_rect_category(40, 40, size);
+                let (big, small) = centered_rect_category(40, 40, size);
 
                 let category_block = Block::default()
                     .borders(Borders::ALL)
-                    .style(Style::default().fg(app.window.mode_color()))
+                    .style(
+                        Style::default().fg(if app.window.popup == PopupWindow::EditCategory {
+                            app.window.mode_color()
+                        } else {
+                            Color::Gray
+                        }),
+                    )
                     .title("(edit category)")
                     .border_type(BorderType::Plain);
 
@@ -340,18 +322,31 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     )
                     .highlight_symbol(HIGHLIGHT_SYMBOL);
 
-                rect.render_stateful_widget(category_list, area, &mut app.categories.state);
+                rect.render_stateful_widget(category_list, big, &mut app.categories.state);
 
                 textarea.set_block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .style(Style::default().fg(app.window.mode_color()))
-                        .title(format!("(new) category")),
+                        .style(Style::default().fg(
+                            if app.window.popup == PopupWindow::NewCategory {
+                                app.window.mode_color()
+                            } else {
+                                Color::Gray
+                            },
+                        ))
+                        .title(format!("(new category for {})", p.id)),
                 );
                 let widget = textarea.widget();
-                rect.render_widget(widget, input);
+                rect.render_widget(widget, small);
             }
-            None => (),
+            None => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
+                let msg = Paragraph::new("No project selected".to_owned());
+                rect.render_widget(msg, area);
+            }
         },
         PopupWindow::SearchGitConfig => {
             // TODO performance
@@ -670,7 +665,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect,Rect) {
+fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect, Rect) {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -697,9 +692,7 @@ fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect,Rect
 
     let y = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(
-            [Constraint::Percentage(85), Constraint::Length(15)]
-        )
+        .constraints([Constraint::Percentage(85), Constraint::Length(15)])
         .split(popup);
 
     (y[0], y[1])

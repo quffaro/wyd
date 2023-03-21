@@ -1,6 +1,7 @@
 use crate::library::gitconfig::guess_git_owner;
 use crate::library::sql::{
     initialize_db,
+    read_category,
     read_project,
     read_tmp,
     read_todo,
@@ -15,7 +16,6 @@ use crate::library::sql::{
     write_new_todo,
     write_project,
     write_tmp_to_project,
-    read_category,
 };
 use glob::glob;
 use rusqlite::{
@@ -28,7 +28,7 @@ use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 use tui::style::Color;
-use tui::widgets::{ListState, TableState, List};
+use tui::widgets::{List, ListState, TableState};
 use tui_textarea::{Input, Key, TextArea};
 
 // use super::new_sql::update_project_category;
@@ -81,7 +81,6 @@ impl<'a> App<'a> {
     //     App::load(&conn)
     // }
     pub fn load(conn: &'a Connection) -> App {
-
         initialize_db(conn);
         App {
             message: "hiii".to_owned(),
@@ -96,7 +95,6 @@ impl<'a> App<'a> {
 }
 
 impl App<'_> {
-    
     pub fn next(&mut self) {
         match self.window {
             Window {
@@ -185,6 +183,13 @@ impl App<'_> {
             BaseWindow::Description => BaseWindow::Todo,
         }
     }
+    pub fn cycle_popup(&mut self) {
+        self.window.popup = match self.window.popup.clone() {
+            PopupWindow::EditCategory => PopupWindow::NewCategory,
+            PopupWindow::NewCategory => PopupWindow::EditCategory,
+            y => y,
+        }
+    }
     pub fn default_select(&mut self) {
         // TODO what if there aren't any?
         self.projects.state.select(Some(0));
@@ -196,7 +201,7 @@ impl App<'_> {
             None => (),
         }
     }
-    
+
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
         self.window.popup = popup;
@@ -242,8 +247,13 @@ impl App<'_> {
                 key: Key::Char('w'),
                 ..
             } => {
-                self.popup_write_and_close(textarea, popup);
-                *textarea = TextArea::default();
+                if self.window.popup == PopupWindow::EditCategory {
+                    *textarea = TextArea::default();
+                    self.popup_write_and_close(textarea, popup)
+                } else {
+                    self.popup_write_and_close(textarea, popup);
+                    *textarea = TextArea::default();
+                }
             }
             Input { key: Key::Down, .. }
             | Input {
@@ -255,6 +265,10 @@ impl App<'_> {
                 key: Key::MouseScrollUp,
                 ..
             } => self.previous(),
+            Input {
+                key: Key::Right, ..
+            } => self.cycle_popup(),
+            Input { key: Key::Left, .. } => self.cycle_popup(),
             Input {
                 key: Key::Enter, ..
             } => self.toggle(),
@@ -269,13 +283,16 @@ impl App<'_> {
                     Some(p) => p.id,
                     None => 0,
                 };
-                write_new_todo(&self.conn, vec![Todo {
-                    id: 0,
-                    parent_id: 0,
-                    project_id: project_id,
-                    todo: content,
-                    is_complete: false,
-                }]);
+                write_new_todo(
+                    &self.conn,
+                    vec![Todo {
+                        id: 0,
+                        parent_id: 0,
+                        project_id: project_id,
+                        todo: content,
+                        is_complete: false,
+                    }],
+                );
 
                 self.todos = FilteredListItems::<Todo>::load(&self.conn);
                 self.todos.select_filter_state(Some(0), project_id);
@@ -308,9 +325,9 @@ impl App<'_> {
                     self.categories = ListItems::<Category>::load(&self.conn);
                     self.projects = TableItems::<Project>::load(&self.conn);
                     self.projects.select_state(Some(idx));
-                },
+                }
                 _ => (),
-            }
+            },
             PopupWindow::SearchGitConfig => {
                 write_tmp_to_project(&self.conn);
                 self.projects = TableItems::<Project>::load(&self.conn);
@@ -364,31 +381,37 @@ impl App<'_> {
                         Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
                         _ => "N/A".to_string(),
                     };
-                    write_project(&self.conn, Project {
-                        id: 0,
-                        path: repo.clone(),
-                        name: regex_last_dir(repo.clone()),
-                        desc: "N/A".to_owned(),
-                        category: "Unknown".to_owned(),
-                        status: ProjectStatus::Unstable,
-                        is_git: true,
-                        owner: guess_git_owner(repo.clone()), //TODO
-                        repo: regex_last_dir(repo.clone()),
-                        last_commit: "N/A".to_owned(),
-                    });
+                    write_project(
+                        &self.conn,
+                        Project {
+                            id: 0,
+                            path: repo.clone(),
+                            name: regex_last_dir(repo.clone()),
+                            desc: "N/A".to_owned(),
+                            category: "Unknown".to_owned(),
+                            status: ProjectStatus::Unstable,
+                            is_git: true,
+                            owner: guess_git_owner(repo.clone()), //TODO
+                            repo: regex_last_dir(repo.clone()),
+                            last_commit: "N/A".to_owned(),
+                        },
+                    );
                 } else {
-                    write_project(&self.conn, Project {
-                        id: 0,
-                        path: path.clone(),
-                        name: regex_last_dir(path.clone()),
-                        desc: "N/A".to_owned(),
-                        category:  "Unknown".to_owned(),
-                        status: ProjectStatus::Unstable,
-                        is_git: false,
-                        owner: "quffaro".to_owned(), //TODO
-                        repo: "".to_owned(),         //TODO should be null sql
-                        last_commit: "N/A".to_owned(),
-                    });
+                    write_project(
+                        &self.conn,
+                        Project {
+                            id: 0,
+                            path: path.clone(),
+                            name: regex_last_dir(path.clone()),
+                            desc: "N/A".to_owned(),
+                            category: "Unknown".to_owned(),
+                            status: ProjectStatus::Unstable,
+                            is_git: false,
+                            owner: "quffaro".to_owned(), //TODO
+                            repo: "".to_owned(),         //TODO should be null sql
+                            last_commit: "N/A".to_owned(),
+                        },
+                    );
                 }
                 self.projects = TableItems::<Project>::load(&self.conn);
                 self.projects.select_state(Some(0));
@@ -425,7 +448,7 @@ impl Project {
             path: current_dir.clone(),
             name: name,
             desc: "".to_owned(),
-            category:  "Unknown".to_owned(),
+            category: "Unknown".to_owned(),
             status: ProjectStatus::Unstable,
             is_git: false,
             owner: "".to_owned(), //TODO
@@ -441,7 +464,7 @@ impl Project {
         };
         // TODO we need to write this
         update_project_status(conn, self);
-    } 
+    }
 }
 
 impl TableItems<Project> {
@@ -618,7 +641,7 @@ impl TableItems<GitConfig> {
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
-                update_tmp(conn,&self.items[i]); // TODO
+                update_tmp(conn, &self.items[i]); // TODO
             } else {
                 continue;
             }
