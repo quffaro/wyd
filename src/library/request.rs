@@ -1,9 +1,10 @@
-use crate::library::code::Project;
+use crate::library::code::{DATABASE, Project};
 /// call github to get most recent commits
 /// /repos/{owner}/{repo}/commits
 /// path parameters:
 /// > owner (string)
 /// > repo (string)
+use rusqlite::Connection;
 use crate::library::sql::{read_project_repos, update_project_last_commit};
 use reqwest::{header, ClientBuilder, Result};
 use serde::Deserialize;
@@ -19,11 +20,12 @@ struct Commit {
 
 #[tokio::main]
 pub async fn request_string() -> Result<()> {
-    let projects = read_project_repos(None).unwrap();
+    let conn = Connection::open(DATABASE).unwrap();
+    let projects = read_project_repos(&conn).unwrap();
 
     for p in projects {
         let request = request(&p).await?.as_str().and_then(|x| Some(x.to_owned()));
-        update_project_last_commit(&p, request.unwrap());
+        update_project_last_commit(&conn, &p, request.unwrap());
     }
 
     Ok(())

@@ -4,8 +4,8 @@
 // TODO Oso
 // TODO ui folder
 use crate::library::code::{
-    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, HIGHLIGHT_SYMBOL,
-    SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
+    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, DATABASE,
+    HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
 };
 use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
@@ -15,7 +15,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dirs::home_dir;
-use iso8601::datetime;
+use rusqlite::Connection;
 use std::env::current_dir;
 use std::io;
 use tui::{
@@ -40,7 +40,8 @@ pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // App
-    let app = App::init();
+    let conn = Connection::open(DATABASE).unwrap();
+    let app = App::load(&conn);
     let _res = run_app(&mut terminal, app);
 
     // Exit App
@@ -59,6 +60,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
     // select
     app.default_select();
 
+    // TODO passing the same connection is unsafe.
     thread::spawn(|| init_tmp_git_config());
     thread::spawn(|| request_string());
 
@@ -106,6 +108,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     key: Key::Char('r'),
                     ..
                 } => app.popup(PopupWindow::EditCategory, Some(Mode::Normal)),
+                Input {
+                    key: Key::Char('R'),
+                    ..
+                } => app.popup(PopupWindow::NewCategory, Some(Mode::Insert)),
                 Input {
                     key: Key::Char('t'),
                     ..
@@ -279,15 +285,23 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                 rect.render_widget(msg, area);
             }
         },
-        PopupWindow::EditCategory => match project {
-            Some(_) => {
+        PopupWindow::NewCategory | PopupWindow::EditCategory => match project {
+            Some(p) => {
                 let size = rect.size();
                 let area = centered_rect(40, 40, size);
                 rect.render_widget(Clear, area);
 
+                let (big, small) = centered_rect_category(40, 40, size);
+
                 let category_block = Block::default()
                     .borders(Borders::ALL)
-                    .style(Style::default().fg(app.window.mode_color()))
+                    .style(
+                        Style::default().fg(if app.window.popup == PopupWindow::EditCategory {
+                            app.window.mode_color()
+                        } else {
+                            Color::Gray
+                        }),
+                    )
                     .title("(edit category)")
                     .border_type(BorderType::Plain);
 
@@ -295,9 +309,10 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     .categories
                     .items
                     .iter()
-                    .map(|t| ListItem::new(format!("{}", t)))
+                    .map(|t| ListItem::new(format!("{}", t.name)))
                     .collect();
 
+                // IF THERE ARE NONE
                 let category_list = List::new(categories)
                     .block(category_block)
                     .highlight_style(
@@ -307,9 +322,31 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     )
                     .highlight_symbol(HIGHLIGHT_SYMBOL);
 
-                rect.render_stateful_widget(category_list, area, &mut app.categories.state);
+                rect.render_stateful_widget(category_list, big, &mut app.categories.state);
+
+                textarea.set_block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(
+                            if app.window.popup == PopupWindow::NewCategory {
+                                app.window.mode_color()
+                            } else {
+                                Color::Gray
+                            },
+                        ))
+                        .title(format!("(new category for {})", p.id)),
+                );
+                let widget = textarea.widget();
+                rect.render_widget(widget, small);
             }
-            None => (),
+            None => {
+                let size = rect.size();
+                let area = centered_rect(40, 40, size);
+                rect.render_widget(Clear, area);
+
+                let msg = Paragraph::new("No project selected".to_owned());
+                rect.render_widget(msg, area);
+            }
         },
         PopupWindow::SearchGitConfig => {
             // TODO performance
@@ -626,4 +663,37 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             .as_ref(),
         )
         .split(popup_layout[1])[1]
+}
+
+fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect, Rect) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    let popup = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1];
+
+    let y = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(85), Constraint::Length(15)])
+        .split(popup);
+
+    (y[0], y[1])
 }
