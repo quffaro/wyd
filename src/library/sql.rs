@@ -233,9 +233,9 @@ pub fn update_project_desc(conn: &Connection, project: &Project, desc: String) -
 }
 
 const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
-pub fn update_project_category(conn: &Connection, project: &Project, cat: String) -> Result<(), rusqlite::Error> {
+pub fn update_project_category(conn: &Connection, project: &Project, cat: &String) -> Result<(), rusqlite::Error> {
 
-    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", cat), project.id))
+    conn.execute(UPDATE_PROJECT_CAT, (format!("{}", &cat), project.id))
         .expect("A");
 
     Ok(())
@@ -300,6 +300,16 @@ pub fn update_todo(conn: &Connection, todo: &Todo) -> Result<(), rusqlite::Error
 
     Ok(())
 }
+
+const INSERT_INTO_CATEGORY: &str = "INSERT OR IGNORE INTO category (name) VALUES (?)";
+pub fn write_category(conn: &Connection, cat: &String) -> Result<(), rusqlite::Error> {
+
+    let mut stmt = conn.prepare(INSERT_INTO_CATEGORY)?;
+    stmt.execute([cat])?;
+
+    Ok(())
+}
+
 /// WRITE TEMPORARY PROJECTS
 const INSERT_INTO_TMP: &str = "INSERT OR IGNORE INTO tmp_git_config (path) VALUES (?)";
 pub fn write_tmp(conn: &Connection, tmp: Vec<String>) -> Result<(), rusqlite::Error> {

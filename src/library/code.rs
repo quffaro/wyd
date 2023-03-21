@@ -11,6 +11,7 @@ use crate::library::sql::{
     update_project_status,
     update_tmp,
     update_todo,
+    write_category,
     write_new_todo,
     write_project,
     write_tmp_to_project,
@@ -27,7 +28,7 @@ use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 use tui::style::Color;
-use tui::widgets::{ListState, TableState};
+use tui::widgets::{ListState, TableState, List};
 use tui_textarea::{Input, Key, TextArea};
 
 // use super::new_sql::update_project_category;
@@ -292,7 +293,7 @@ impl App<'_> {
                 (Some(idx), Some(p)) => match self.categories.current() {
                     Some(cat) => {
                         let name = &cat.name;
-                        update_project_category(&self.conn, p, name.to_owned());
+                        update_project_category(&self.conn, p, name);
                         self.projects = TableItems::<Project>::load(&self.conn);
                         self.projects.select_state(Some(idx));
                     }
@@ -302,7 +303,9 @@ impl App<'_> {
             },
             PopupWindow::NewCategory => match self.projects.current_state() {
                 (Some(idx), Some(p)) => {
-                    update_project_category(&self.conn, p, content).expect("BBB!");
+                    update_project_category(&self.conn, p, &content).expect("BBB!");
+                    write_category(&self.conn, &content);
+                    self.categories = ListItems::<Category>::load(&self.conn);
                     self.projects = TableItems::<Project>::load(&self.conn);
                     self.projects.select_state(Some(idx));
                 },
@@ -820,7 +823,7 @@ impl ListItems<Category> {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                update_project_category(conn, project, self.items[i].name.to_owned()); // TODO not the best!
+                update_project_category(conn, project, &self.items[i].name); // TODO not the best!
             } else {
                 continue;
             }

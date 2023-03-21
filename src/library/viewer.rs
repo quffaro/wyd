@@ -327,7 +327,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                     .categories
                     .items
                     .iter()
-                    .map(|t| ListItem::new(format!("{}", t)))
+                    .map(|t| ListItem::new(format!("{}", t.name)))
                     .collect();
 
                 // IF THERE ARE NONE
