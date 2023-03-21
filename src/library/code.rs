@@ -184,11 +184,22 @@ impl App<'_> {
         }
     }
     pub fn cycle_popup(&mut self) {
-        self.window.popup = match self.window.popup.clone() {
-            PopupWindow::EditCategory => PopupWindow::NewCategory,
-            PopupWindow::NewCategory => PopupWindow::EditCategory,
-            y => y,
+        match self.window.popup {
+            PopupWindow::EditCategory => { 
+                self.window.popup = PopupWindow::NewCategory; 
+                self.window.mode = Mode::Insert;
+            }
+            PopupWindow::NewCategory => { 
+                self.window.popup = PopupWindow::EditCategory; 
+                self.window.mode = Mode::Normal;
+            }
+            _ => {}
         }
+        // self.window.popup = match self.window.popup.clone() {
+        //     PopupWindow::EditCategory => PopupWindow::NewCategory,
+        //     PopupWindow::NewCategory => PopupWindow::EditCategory,
+        //     y => y,
+        // }
     }
     pub fn default_select(&mut self) {
         // TODO what if there aren't any?
