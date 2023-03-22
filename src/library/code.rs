@@ -76,14 +76,17 @@ pub fn fetch_config_files() -> Vec<String> {
 
     tmp
 }
-
+pub struct LoadingState {
+    pub throb: ThrobberState,
+    pub status: WindowStatus
+}
 /// APP
 pub struct App<'a> {
     pub message: String,
     pub window: Window,
     pub config: Option<Config>,
     pub conn: &'a Connection,
-    pub throbber: u8,
+    pub throbber: LoadingState,
     pub configs: TableItems<GitConfig>,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
@@ -104,7 +107,10 @@ impl<'a> App<'a> {
             window: Window::new(false),
             config: None,
             conn: &conn,
-            throbber: 0,
+            throbber: LoadingState {
+                throb: ThrobberState::default(),
+                status: WindowStatus::NotLoaded,
+            },
             configs: TableItems::<GitConfig>::load(&conn),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
@@ -120,8 +126,11 @@ impl<'a> App<'a> {
 }
 
 impl App<'_> {
-    pub fn on_tick(&mut self) {
-        self.throbber = (self.throbber + 1) % 5;
+    // pub fn on_tick(&mut self) {
+    //     self.throbber.count += 1;
+    // }
+    pub fn loaded(&mut self) {
+        self.throbber.status = WindowStatus::Loaded;
     }
     pub fn next(&mut self) {
         match self.window {

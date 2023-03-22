@@ -4,8 +4,8 @@
 // TODO Oso
 // TODO ui folder
 use crate::library::code::{
-    home_path, App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
-    HIGHLIGHT_SYMBOL, IN_HOME_DATABASE, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG,
+    home_path, App, BaseWindow, ListNavigate, LoadingState, Mode, PopupWindow, Window,
+    WindowStatus, HIGHLIGHT_SYMBOL, IN_HOME_DATABASE, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG,
     SUB_HOME_FOLDER,
 };
 use crate::library::config::init_config;
@@ -34,7 +34,8 @@ use tui::{
 use tui_textarea::{Input, Key, TextArea};
 use tui_tree_widget;
 // use tokio::task;
-use std::thread::{self, current};
+use std::thread::{self, current, sleep};
+use std::time;
 
 pub fn viewer() -> Result<(), Box<dyn std::error::Error>> {
     // setup terminal
@@ -67,56 +68,31 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
     // TODO passing the same connection is unsafe.
     // TODO run if there is a config file
-
-    let mut counter = 0;
+    let (tx, rx) = mpsc::channel();
     match app.config {
         Some(_) => {
-            let (tx, rx) = mpsc::channel();
+            thread::spawn(|| init_tmp_git_config());
             thread::spawn(move || {
                 request_string();
+                // thread::sleep(time::Duration::from_secs(10));
                 tx.send(true).unwrap()
-            });
-            thread::spawn(move || loop {
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => {
-                        println!("{}", counter);
-                        break;
-                    }
-                    Err(TryRecvError::Empty) => {
-                        counter += 1;
-                        ()
-                    }
-                }
             });
         }
         None => {}
-    };
-
-    // match app.config {
-    //     Some(_) => {
-    //         thread::spawn(|| init_tmp_git_config());
-    //         let (tx, rx) = mpsc::channel();
-    //         thread::spawn(move || {
-    //             request_string();
-    //             tx.send(true).unwrap()
-    //         });
-    //         thread::spawn(move || loop {
-    //             match rx.try_recv() {
-    //                 Ok(_) | Err(TryRecvError::Disconnected) => {
-    //                     break;
-    //                 }
-    //                 Err(TryRecvError::Empty) => {app.tick();}
-    //             }
-    //         }
-    //     }
+    }
 
     let mut textarea = TextArea::default();
-
     loop {
         terminal.draw(|rect| {
             ui(rect, &mut app);
             ui_popup(rect, &mut textarea, &mut app);
         })?;
+
+        // TODO do we
+        match rx.try_recv() {
+            Err(TryRecvError::Empty) => app.throbber.throb.calc_next(),
+            Ok(_) | Err(_) => app.throbber.status = WindowStatus::Loaded,
+        }
 
         // app.on_tick();
         // app.input(&mut textarea);
@@ -250,7 +226,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .into_os_string()
         .into_string()
         .unwrap();
-    let title = Paragraph::new(format!("{:?} - {}", app.throbber, pwd))
+    let title = Paragraph::new(format!("{}", pwd))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -284,15 +260,41 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     rect.render_widget(right_todo_search, todo_chunks[1]);
 
     // chunk 3 status
-    let throb = Paragraph::new(match app.throbber % 5 {
-        0 => "⠾",
-        1 => "⠽",
-        2 => "⠻",
-        3 => "⠯",
-        _ => "⠷",
-    });
+    // let mut counter = Counter::new();
 
-    rect.render_widget(throb, chunks[3]);
+    // let throb = Paragraph::new(match app.throbber {
+    //     LoadingState {
+    //         status: WindowStatus::NotLoaded,
+    //         count: x,
+    //     } => match x % 5 {
+    //         0 => "⠾",
+    //         1 => "⠽",
+    //         2 => "⠻",
+    //         3 => "⠯",
+    //         _ => "⠷",
+    //     },
+    //     _ => "LOADED!",
+    // });
+
+    let full = throbber_widgets_tui::Throbber::default()
+    .label("Loading commits from Github...")
+    .style(tui::style::Style::default().fg(tui::style::Color::Cyan))
+    .throbber_style(
+        tui::style::Style::default()
+            .fg(tui::style::Color::Red)
+            .add_modifier(tui::style::Modifier::BOLD),
+    )
+    .use_type(throbber_widgets_tui::WhichUse::Spin);
+
+    let done = Paragraph::new("Done!")
+        .style(Style::default().fg(tui::style::Color::Cyan));
+
+    match app.throbber.status {
+        WindowStatus::NotLoaded => rect.render_stateful_widget(full, chunks[3], &mut app.throbber.throb),
+        WindowStatus::Loaded => rect.render_widget(done, chunks[3] )
+    }
+
+    // rect.render_stateful_widget(throb, chunks[3], &mut app.throbber.count);
 }
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
