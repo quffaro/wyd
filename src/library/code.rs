@@ -29,6 +29,7 @@ use std::path::PathBuf;
 use std::{env, fmt};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
+use throbber_widgets_tui::ThrobberState;
 use tui::style::Color;
 use tui::widgets::{List, ListState, TableState};
 use tui_textarea::{Input, Key, TextArea};
@@ -37,6 +38,7 @@ use tui_textarea::{Input, Key, TextArea};
 /// SQL
 /// // TODO needs ot be dynamic
 
+pub const PAT: &str = "/.config/wyd/pat.txt";
 pub const IN_HOME_CONFIG: &str = "/.config/wyd/config";
 pub const IN_HOME_DATABASE: &str = "/.config/wyd/projects.db";
 pub const DEFAULT_IN_HOME_SEARCH: &str = "/Documents";
@@ -74,13 +76,17 @@ pub fn fetch_config_files() -> Vec<String> {
 
     tmp
 }
-
+pub struct LoadingState {
+    pub throb: ThrobberState,
+    pub status: WindowStatus
+}
 /// APP
 pub struct App<'a> {
     pub message: String,
     pub window: Window,
     pub config: Option<Config>,
     pub conn: &'a Connection,
+    pub throbber: LoadingState,
     pub configs: TableItems<GitConfig>,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
@@ -101,6 +107,10 @@ impl<'a> App<'a> {
             window: Window::new(false),
             config: None,
             conn: &conn,
+            throbber: LoadingState {
+                throb: ThrobberState::default(),
+                status: WindowStatus::NotLoaded,
+            },
             configs: TableItems::<GitConfig>::load(&conn),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
@@ -116,6 +126,12 @@ impl<'a> App<'a> {
 }
 
 impl App<'_> {
+    // pub fn on_tick(&mut self) {
+    //     self.throbber.count += 1;
+    // }
+    pub fn loaded(&mut self) {
+        self.throbber.status = WindowStatus::Loaded;
+    }
     pub fn next(&mut self) {
         match self.window {
             Window {
@@ -931,7 +947,7 @@ impl FromSql for ProjectStatus {
             .map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
-
+#[derive(Debug)]
 pub struct Config {
     pub owner: String,
     pub search_folder: String,
