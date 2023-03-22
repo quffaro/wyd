@@ -1,4 +1,5 @@
-use crate::library::code::{Project, IN_HOME_DATABASE, home_path};
+use crate::library::code::{home_path, Config, Project, IN_HOME_DATABASE, PAT};
+use crate::library::config::load_config;
 use crate::library::sql::{read_project_repos, update_project_last_commit};
 use dirs::home_dir;
 use reqwest::{header, ClientBuilder, Result};
@@ -23,17 +24,28 @@ pub async fn request_string() -> Result<()> {
     let conn = Connection::open(home_path(IN_HOME_DATABASE)).unwrap();
     let projects = read_project_repos(&conn).unwrap();
 
-    for p in projects {
-        let request = request(&p).await?.as_str().and_then(|x| Some(x.to_owned()));
-        update_project_last_commit(&conn, &p, request.unwrap());
+    let config = load_config();
+    // println!("{:#?}", &config);
+    match config {
+        Some(conf) => {
+            for p in projects {
+                let request = request(&conf.owner, &p)
+                    .await?
+                    .as_str()
+                    .and_then(|x| Some(x.to_owned()));
+                // println!("{:#?}", request);
+                update_project_last_commit(&conn, &p, request.unwrap());
+            }
+        }
+        None => (),
     }
 
     Ok(())
 }
 
-pub async fn request(project: &Project) -> Result<serde_json::Value> {
+pub async fn request(owner: &String, project: &Project) -> Result<serde_json::Value> {
     // TODO this needs better error handling...
-    let mut secret = fs::read_to_string("pat.txt").expect("A");
+    let mut secret = fs::read_to_string(home_path(PAT)).expect("A");
     secret.pop();
 
     let mut headers = header::HeaderMap::new();
@@ -42,7 +54,7 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
     headers.insert(header::AUTHORIZATION, auth_value);
     headers.insert(
         header::USER_AGENT,
-        header::HeaderValue::from_str("quffaro").unwrap(), // TODO this should be your github user
+        header::HeaderValue::from_str(owner).unwrap(), // TODO this should be your github user
     );
     // TODO use user_agent function?
 
@@ -66,7 +78,7 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
         .json::<serde_json::Value>()
         .await?;
     // handle.done();
-
+    // println!("{:#?}", response);
     let result = response
         .get(0)
         .and_then(|v| v.get("commit"))
@@ -75,6 +87,7 @@ pub async fn request(project: &Project) -> Result<serde_json::Value> {
         .unwrap_or(&json!("N/A"))
         .to_owned();
 
+    // println!("{:#?}", result);
     Ok(result)
     //UTC time, ISO 8601
 }

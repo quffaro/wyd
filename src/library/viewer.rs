@@ -4,12 +4,13 @@
 // TODO Oso
 // TODO ui folder
 use crate::library::code::{
-    App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus, IN_HOME_DATABASE, home_path,
-    HIGHLIGHT_SYMBOL, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG, SUB_HOME_FOLDER,
+    home_path, App, BaseWindow, ListNavigate, Mode, PopupWindow, Window, WindowStatus,
+    HIGHLIGHT_SYMBOL, IN_HOME_DATABASE, SEARCH_DIRECTORY_PREFIX, SUBPATH_GIT_CONFIG,
+    SUB_HOME_FOLDER,
 };
+use crate::library::config::init_config;
 use crate::library::request::request_string;
 use crate::library::sql::init_tmp_git_config;
-use crate::library::config::init_config;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -19,6 +20,7 @@ use dirs::home_dir;
 use rusqlite::Connection;
 use std::env::current_dir;
 use std::io;
+use std::sync::mpsc::{self, TryRecvError};
 use tui::text::Text;
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -65,13 +67,48 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 
     // TODO passing the same connection is unsafe.
     // TODO run if there is a config file
+
+    let mut counter = 0;
     match app.config {
         Some(_) => {
-            thread::spawn(|| init_tmp_git_config());
-            thread::spawn(|| request_string());
+            let (tx, rx) = mpsc::channel();
+            thread::spawn(move || {
+                request_string();
+                tx.send(true).unwrap()
+            });
+            thread::spawn(move || loop {
+                match rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Disconnected) => {
+                        println!("{}", counter);
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {
+                        counter += 1;
+                        ()
+                    }
+                }
+            });
         }
         None => {}
-    }
+    };
+
+    // match app.config {
+    //     Some(_) => {
+    //         thread::spawn(|| init_tmp_git_config());
+    //         let (tx, rx) = mpsc::channel();
+    //         thread::spawn(move || {
+    //             request_string();
+    //             tx.send(true).unwrap()
+    //         });
+    //         thread::spawn(move || loop {
+    //             match rx.try_recv() {
+    //                 Ok(_) | Err(TryRecvError::Disconnected) => {
+    //                     break;
+    //                 }
+    //                 Err(TryRecvError::Empty) => {app.tick();}
+    //             }
+    //         }
+    //     }
 
     let mut textarea = TextArea::default();
 
@@ -81,6 +118,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
             ui_popup(rect, &mut textarea, &mut app);
         })?;
 
+        // app.on_tick();
         // app.input(&mut textarea);
         // TODO i would like for this to be in its own rule
         match app.window {
@@ -129,6 +167,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     key: Key::Char('p'),
                     ..
                 } => app.popup(PopupWindow::SearchGitConfig, Some(Mode::Normal)),
+                Input {
+                    key: Key::Char('x'),
+                    ..
+                } => match app.window {
+                    Window {
+                        base: BaseWindow::Todo,
+                        popup: PopupWindow::None,
+                        ..
+                    } => app.toggle(),
+                    _ => {}
+                },
                 Input {
                     key: Key::Enter, ..
                 } => app.toggle(),
@@ -188,6 +237,8 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
                 Constraint::Percentage(50),
                 // todo list and description
                 Constraint::Percentage(40),
+                // status bar
+                Constraint::Length(1),
             ]
             .as_ref(),
         )
@@ -199,7 +250,7 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
         .into_os_string()
         .into_string()
         .unwrap();
-    let title = Paragraph::new(format!("{} - {}", "hiii", pwd))
+    let title = Paragraph::new(format!("{:?} - {}", app.throbber, pwd))
         .style(Style::default().fg(Color::LightCyan))
         .block(
             Block::default()
@@ -231,6 +282,17 @@ fn ui<B: Backend>(rect: &mut Frame<B>, app: &mut App) {
     let (left_todo_list, right_todo_search) = render_todo_and_desc(&app);
     rect.render_stateful_widget(left_todo_list, todo_chunks[0], &mut app.todos.state);
     rect.render_widget(right_todo_search, todo_chunks[1]);
+
+    // chunk 3 status
+    let throb = Paragraph::new(match app.throbber % 5 {
+        0 => "⠾",
+        1 => "⠽",
+        2 => "⠻",
+        3 => "⠯",
+        _ => "⠷",
+    });
+
+    rect.render_widget(throb, chunks[3]);
 }
 
 fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut App) {
@@ -256,7 +318,6 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
             // SEARCH DIRECTORY
             let widget = textarea.widget();
             rect.render_widget(widget, area);
-
         }
         PopupWindow::AddTodo => match project {
             Some(p) => {
@@ -363,7 +424,7 @@ fn ui_popup<B: Backend>(rect: &mut Frame<B>, textarea: &mut TextArea, app: &mut 
                                 Color::Gray
                             },
                         ))
-                        .title(format!("(new category for {})", p.id)),
+                        .title(format!("(new category for {})", p.name)),
                 );
                 let widget = textarea.widget();
                 rect.render_widget(widget, small);
@@ -483,11 +544,6 @@ fn render_popup_help_table<'a>(app: &App) -> Table<'a> {
 // render projects
 fn render_projects<'a>(app: &App) -> Table<'a> {
     let home_dir = home_path(SUB_HOME_FOLDER);
-    // format!(
-    //     "{}{}",
-    //     home_dir().unwrap().into_os_string().into_string().unwrap(),
-    //     SUB_HOME_FOLDER
-    // );
     let rows: Vec<Row> = app
         .projects
         .items
@@ -519,13 +575,15 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(
-                    Style::default().fg(if app.window.base == BaseWindow::Project {
+                .style(Style::default().fg(
+                    if app.window.base == BaseWindow::Project
+                        && app.window.popup == PopupWindow::None
+                    {
                         Color::Yellow
                     } else {
                         Color::Gray
-                    }),
-                )
+                    },
+                ))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -537,11 +595,15 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.window.base == BaseWindow::Project {
-                    Color::Yellow
-                } else {
-                    Color::White
-                })
+                .bg(
+                    if app.window.base == BaseWindow::Project
+                        && app.window.popup == PopupWindow::None
+                    {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    },
+                )
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
