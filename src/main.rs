@@ -1,60 +1,18 @@
-// TODO
-mod library;
+use std::sync::Arc;
 
-use std::thread;
-use std::sync::mpsc::{self, TryRecvError};
+#[tokio::main]
+async fn main() -> Result<()> {
+    let (sync_io_tx, mut sync_io_rx) = tokio::sync::mpsc::channel::<IoEvent>(100);
 
-struct Counter {
-    counter: u64
-}
+    let app = Arx::new(tokio::sync::Mutex::new(App::new(sync_io_tx.clone())));
+    let app_ui = Arc::clone(&app);
 
-impl Counter {
-    fn tick(&mut self) {
-        self.counter += 1;
-    }
-    fn count(&mut self, count: u64) {
-        self.counter = count;
-    }
-    fn new() -> Counter {
-        Counter {
-            counter: 0
+    tokio::spawn(async move {
+        let mut handler = IoAsyncHandler::new(app);
+        while let Some(io_event) = sync_io_rx.recv().await {
+            handler.handle_io_event(io_event).await;
         }
-    }
-}
+    });
 
-fn main() {
-    library::viewer::viewer();
-    // let mut ctr = Counter::new();
-    // let mut counter = 0;
-    // let (ty, ry) = mpsc::channel();
-    // match Some(1) {
-    //     Some(_) => {
-    //         let (tx, rx) = mpsc::channel();
-    //         thread::spawn(move || {
-    //             library::request::request_string();
-    //             tx.send(true).unwrap()
-    //         });
-    //         thread::spawn(move || loop {
-    //             match rx.try_recv() {
-    //                 Ok(_) | Err(TryRecvError::Disconnected) => {
-    //                     // println!("{}", counter);
-    //                     ty.send(true).unwrap();
-    //                     break;
-    //                 }
-    //                 Err(TryRecvError::Empty) => {
-    //                     counter += 1;
-    //                     ()
-    //                 }
-    //             }
-    //         });
-    //     }
-    //     None => {}
-    // };
-
-    // loop { 
-    //     match ry.try_recv() {
-    //         Ok(_) => break,
-    //         Err(_) => ctr.count(counter),
-    //     }
-    // }
+    ui(&app_ui).await?;
 }
