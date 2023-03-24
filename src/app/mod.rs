@@ -19,6 +19,7 @@ pub struct App {
     actions: Actions,
     is_loading: bool,
     state: AppState,
+    // data states go here
 }
 
 impl App {
