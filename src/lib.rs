@@ -3,19 +3,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use app::{App, AppReturn};
-use inout::IoEvent;
+use eyre::Result;
 use inputs::events::Events;
 use inputs::InputEvent;
-use tui::backend::CrosstermBackend;
-use tui::Terminal;
+use io::IoEvent;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 
 use crate::app::ui;
 
 pub mod app;
-pub mod inout;
 pub mod inputs;
+pub mod io;
 
-pub async fn ui(app: &Arc<tokio::sync::Mutex<App>>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_ui(app: &Arc<tokio::sync::Mutex<App>>) -> Result<()> {
     let stdout = stdout();
     crossterm::terminal::enable_raw_mode()?;
     let backend = CrosstermBackend::new(stdout);
@@ -38,7 +39,7 @@ pub async fn ui(app: &Arc<tokio::sync::Mutex<App>>) -> Result<(), Box<dyn std::e
 
         let result = match events.next().await {
             InputEvent::Input(key) => app.do_action(key).await,
-            InputEvent::Tick => app.update_on_tick().await,
+            InputEvent::Nothing => app.do_nothing().await,
         };
 
         if result == AppReturn::Exit {

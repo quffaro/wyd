@@ -2,8 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-// use log::error;
-
 use super::key::Key;
 use super::InputEvent;
 
@@ -33,11 +31,13 @@ impl Events {
                         let key = Key::from(key);
                         if let Err(err) = event_tx.send(InputEvent::Input(key)).await {
                             // error!("Oops!, {}", err);
+                            {}
                         }
                     }
                 }
-                if let Err(err) = event_tx.send(InputEvent::Tick).await {
+                if let Err(err) = event_tx.send(InputEvent::Nothing).await {
                     // error!("Oops!, {}", err);
+                    {}
                 }
                 if event_stop_capture.load(Ordering::Relaxed) {
                     break;
@@ -54,7 +54,7 @@ impl Events {
 
     /// Attempts to read an event.
     pub async fn next(&mut self) -> InputEvent {
-        self.rx.recv().await.unwrap_or(InputEvent::Tick)
+        self.rx.recv().await.unwrap_or(InputEvent::Nothing)
     }
 
     /// Close
