@@ -12,12 +12,12 @@ async fn main() -> Result<()> {
     let app = Arc::new(tokio::sync::Mutex::new(App::new(sync_io_tx.clone())));
     let app_ui = Arc::clone(&app);
 
-    // tokio::spawn(async move {
-    //     let mut handler = IoAsyncHandler::new(app);
-    //     while let Some(io_event) = sync_io_rx.recv().await {
-    //         handler.handle_io_event(io_event).await;
-    //     }
-    // });
+    tokio::spawn(async move {
+        let mut handler = IoAsyncHandler::new(app);
+        while let Some(io_event) = sync_io_rx.recv().await {
+            handler.handle_io_event(io_event).await;
+        }
+    });
 
     start_ui(&app_ui).await;
 
