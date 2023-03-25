@@ -6,11 +6,11 @@ use eyre::Result;
 use super::IoEvent;
 use crate::app::App;
 
-pub struct IoAsyncHandler {
-    app: Arc<tokio::sync::Mutex<App>>,
+pub struct IoAsyncHandler<'a> {
+    app: Arc<tokio::sync::Mutex<App<'a>>>,
 }
 
-impl IoAsyncHandler {
+impl IoAsyncHandler<'_> {
     pub fn new(app: Arc<tokio::sync::Mutex<App>>) -> Self {
         Self { app }
     }

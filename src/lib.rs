@@ -37,7 +37,7 @@ pub fn home_path(path: &str) -> String {
     )
 }
 
-pub async fn start_ui(app: &Arc<tokio::sync::Mutex<App>>) -> Result<()> {
+pub async fn start_ui(app: &Arc<tokio::sync::Mutex<App<'_>>>) -> Result<()> {
     let stdout = stdout();
     crossterm::terminal::enable_raw_mode()?;
     let backend = CrosstermBackend::new(stdout);
