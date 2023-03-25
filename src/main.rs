@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use eyre::Result;
 use std::sync::Arc;
 use wyd::app::App;

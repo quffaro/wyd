@@ -1,4 +1,9 @@
-use ratatui::widgets::{List, ListState, TableState};
+use ratatui::widgets::{ListState, TableState};
+
+pub mod gitconfig;
+pub mod projects;
+pub mod todos;
+pub mod windows;
 
 pub trait ListNav {
     fn get_items_len<'a>(&'a self) -> usize;
@@ -36,7 +41,7 @@ pub struct ListItems<T> {
     pub state: ListState,
 }
 
-impl<T> ListNavigate for ListItems<T> {
+impl<T> ListNav for ListItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }
@@ -55,7 +60,7 @@ pub struct FilteredListItems<T> {
     pub state: ListState,
 }
 
-impl<T> ListNavigate for FilteredListItems<T> {
+impl<T> ListNav for FilteredListItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }
@@ -73,7 +78,7 @@ pub struct TableItems<T> {
     pub state: TableState,
 }
 
-impl<T> ListNavigate for TableItems<T> {
+impl<T> ListNav for TableItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }

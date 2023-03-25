@@ -1,13 +1,15 @@
+use super::structs::windows::Window;
+
 #[derive(Clone)]
 pub enum AppState {
     Init,
-    Initialized { count: u32 },
+    Initialized { window: Window },
 }
 
 impl AppState {
     pub fn initialized() -> Self {
-        let count = 0;
-        Self::Initialized { count }
+        let window = Window::new(true);
+        Self::Initialized { window }
     }
 
     pub fn is_initialized(&self) -> bool {

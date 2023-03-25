@@ -253,7 +253,7 @@ impl App<'_> {
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
         self.window.popup = popup;
-        match mode {
+        atch mode {
             Some(m) => self.window.mode = m,
             None => (),
         }
