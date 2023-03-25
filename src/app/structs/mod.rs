@@ -36,12 +36,12 @@ pub trait ListNav {
 }
 
 #[derive(Clone, Debug)]
-pub struct ListItems<T> {
+pub struct PlainListItems<T> {
     pub items: Vec<T>,
     pub state: ListState,
 }
 
-impl<T> ListNav for ListItems<T> {
+impl<T> ListNav for PlainListItems<T> {
     fn get_items_len<'a>(&'a self) -> usize {
         self.items.len()
     }

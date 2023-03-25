@@ -1,6 +1,7 @@
 use self::actions::Actions;
 use self::state::AppState;
-use self::structs::{projects::Project, todos::Todo, FilteredListItems, ListItems, TableItems};
+use self::structs::{projects::Project, todos::Todo, FilteredListItems, TableItems};
+use super::sql::initialize_db;
 use super::{home_path, PATH_DB};
 use crate::app::actions::Action;
 use crate::inputs::key::Key;
@@ -19,39 +20,37 @@ pub enum AppReturn {
     Continue,
 }
 
-pub struct App<'a> {
+pub struct App {
     io_tx: tokio::sync::mpsc::Sender<IoEvent>,
     actions: Actions,
     is_loading: bool,
     state: AppState,
-    conn: &'a Connection,
     // data states go here
     projects: TableItems<Project>,
     todos: FilteredListItems<Todo>,
 }
 
-impl<'a> App<'a> {
+impl App {
     // TODO rename to load
-    pub fn new(conn: &'a Connection, io_tx: tokio::sync::mpsc::Sender<IoEvent>) -> Self {
+    pub fn new(io_tx: tokio::sync::mpsc::Sender<IoEvent>) -> Self {
+        let conn = &Connection::open(home_path(PATH_DB)).unwrap();
+        initialize_db(conn);
+        let projects = TableItems::<Project>::load(conn);
+        let todos = FilteredListItems::<Todo>::load(conn);
+
         let actions = vec![Action::Quit].into();
         let is_loading = false;
         let state = AppState::default();
-        let conn = &Connection::open(home_path(PATH_DB)).unwrap();
-        let projects = TableItems::<Project>::load(conn);
-        let todos = FilteredListItems::<Todo>::load(conn);
+
         Self {
             io_tx,
             actions,
             is_loading,
             state,
-            conn,
             projects,
             todos,
         }
     }
-}
-
-impl App<'_> {
     pub async fn do_action(&mut self, key: Key) -> AppReturn {
         if let Some(action) = self.actions.find(key) {
             match action {

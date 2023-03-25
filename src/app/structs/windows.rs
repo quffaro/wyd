@@ -1,7 +1,7 @@
 // https://applied-math-coding.medium.com/
 // use std::cell::RefCell;
 // use std::rc::Rc;
-use super::{ListItems, ListNav, ListState};
+use super::{ListNav, ListState, PlainListItems};
 use ratatui::style::Color;
 use std::fmt;
 use strum::IntoEnumIterator;
@@ -71,9 +71,9 @@ impl fmt::Display for BaseWindow {
     }
 }
 
-impl ListItems<BaseWindow> {
-    fn new() -> ListItems<BaseWindow> {
-        ListItems {
+impl PlainListItems<BaseWindow> {
+    fn new() -> PlainListItems<BaseWindow> {
+        PlainListItems {
             items: BaseWindow::iter().collect(),
             state: ListState::default(),
         }

@@ -1,19 +1,6 @@
 use crate::app::structs::projects::Project;
 use rusqlite::{params, Connection, Result};
 
-const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
-    id          integer primary key autoincrement, 
-    path        varchar(255), 
-    name        varchar(255), 
-    desc        varchar(4000), 
-    cat         varchar(255), 
-    status      varchar(255),
-    is_git      tinyint(1),
-    owner       varchar(255),
-    repo        varchar(255),
-    last_commit varchar(255),
-    UNIQUE(path)
-);";
 const READ_PROJECT: &str =
     "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from project";
 pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {

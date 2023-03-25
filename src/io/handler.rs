@@ -6,13 +6,24 @@ use eyre::Result;
 use super::IoEvent;
 use crate::app::App;
 
-pub struct IoAsyncHandler<'a> {
-    app: Arc<tokio::sync::Mutex<App<'a>>>,
+use crate::app::structs::projects::Project;
+use crate::app::structs::TableItems;
+use crate::PATH_DB;
+use rusqlite::Connection;
+
+pub struct IoAsyncHandler {
+    app: Arc<tokio::sync::Mutex<App>>,
+    // TODO DATA SHOULD BE MOVED HERE
+    projects: TableItems<Project>,
 }
 
-impl IoAsyncHandler<'_> {
+impl IoAsyncHandler {
     pub fn new(app: Arc<tokio::sync::Mutex<App>>) -> Self {
-        Self { app }
+        let conn = &Connection::open(PATH_DB).unwrap();
+        Self {
+            app,
+            projects: TableItems::<Project>::load(conn),
+        }
     }
 
     pub async fn handle_io_event(&mut self, io_event: IoEvent) {
