@@ -78,7 +78,7 @@ pub fn fetch_config_files() -> Vec<String> {
 }
 pub struct LoadingState {
     pub throb: ThrobberState,
-    pub status: WindowStatus
+    pub status: WindowStatus,
 }
 /// APP
 pub struct App<'a> {
