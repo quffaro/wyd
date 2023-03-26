@@ -1,7 +1,9 @@
 use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Row, Table, Wrap, Cell};
+use ratatui::widgets::{
+    Block, BorderType, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap,
+};
 use ratatui::{symbols, Frame};
 
 use super::actions::Actions;
@@ -10,7 +12,7 @@ use super::structs::{windows::BaseWindow, ListNav, PlainListItems, TableItems};
 use crate::app::App;
 
 use crate::app::structs::projects::Project;
-use crate::{home_path, PATH_DB};
+use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
 use rusqlite::Connection;
 
 pub fn draw<B>(rect: &mut Frame<B>, app: &App)
@@ -62,7 +64,7 @@ where
     // rect.render_widget(right_todo_search, project_info_chunk[1]);
 }
 fn render_projects<'a>(app: &App) -> Table<'a> {
-    let home_dir = home_path(SUB_HOME_FOLDER);
+    let home_dir = home_path(CONFIG_SEARCH_FOLDER);
     let rows: Vec<Row> = app
         .projects
         .items
@@ -72,14 +74,15 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
                 Cell::from(
                     p.name
                         .replace(&home_dir, "...")
-                        .replace(SUBPATH_GIT_CONFIG, "") // TODO into constant
+                        .replace(GITCONFIG_SUFFIX, "") // TODO into constant
                         .clone(),
                 ),
                 Cell::from(p.category.to_string().clone()),
                 Cell::from(p.status.to_string().clone()),
                 Cell::from(p.last_commit.to_string().clone()),
-            ])})
-            .collect()
+            ])
+        })
+        .collect();
 
     let projects = Table::new(vec![])
         .style(Style::default().fg(Color::White))

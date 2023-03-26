@@ -1,27 +1,36 @@
-#![allow(dead_code)]
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use std::io;
+use wyd::app::{App, AppResult};
+use wyd::event::{Event, EventHandler};
+use wyd::handler::handle_key_events;
+use wyd::tui::Tui;
 
-use eyre::Result;
-use std::sync::Arc;
-use wyd::app::App;
-use wyd::io::handler::IoAsyncHandler;
-use wyd::io::IoEvent;
-use wyd::start_ui;
+fn main() -> AppResult<()> {
+    // Create an application.
+    let mut app = App::new();
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let (sync_io_tx, mut sync_io_rx) = tokio::sync::mpsc::channel::<IoEvent>(100);
+    // Initialize the terminal user interface.
+    let backend = CrosstermBackend::new(io::stderr());
+    let terminal = Terminal::new(backend)?;
+    let events = EventHandler::new(250);
+    let mut tui = Tui::new(terminal, events);
+    tui.init()?;
 
-    let app = Arc::new(tokio::sync::Mutex::new(App::new(sync_io_tx.clone())));
-    let app_ui = Arc::clone(&app);
-
-    tokio::spawn(async move {
-        let mut handler = IoAsyncHandler::new(app);
-        while let Some(io_event) = sync_io_rx.recv().await {
-            handler.handle_io_event(io_event).await;
+    // Start the main loop.
+    while app.running {
+        // Render the user interface.
+        tui.draw(&mut app)?;
+        // Handle events.
+        match tui.events.next()? {
+            Event::Tick => app.tick(),
+            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+            Event::Mouse(_) => {}
+            Event::Resize(_, _) => {}
         }
-    });
+    }
 
-    start_ui(&app_ui).await;
-
+    // Exit the user interface.
+    tui.exit()?;
     Ok(())
 }
