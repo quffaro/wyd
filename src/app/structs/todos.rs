@@ -9,7 +9,7 @@ pub struct Todo {
     pub project_id: u8,
     pub todo: String,
     pub is_complete: bool,
-    pub priority: String,
+    pub priority: u8,
 }
 
 impl FilteredListItems<Todo> {

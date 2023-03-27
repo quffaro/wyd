@@ -1,4 +1,4 @@
-use crate::app::structs::ListNav;
+use crate::app::structs::{windows::Mode, ListNav};
 use crate::app::App;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
 use ratatui::backend::Backend;
@@ -8,6 +8,8 @@ use ratatui::terminal::Frame;
 use ratatui::widgets::{
     Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
 };
+
+use super::structs::windows::BaseWindow;
 
 pub fn main_ui<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {}
 
@@ -19,7 +21,12 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
             frame.render_widget(Clear, area);
 
             let text = Paragraph::new(app.input.value())
-                .style(Style::default().fg(Color::Yellow))
+                .style(Style::default().fg(
+                    match app.window.mode {
+                        Mode::Insert => Color::Yellow,
+                        Mode::Normal => Color::Green,
+                    }
+                ))
                 .block(
                     Block::default()
                         .title("(add todo)")
@@ -48,7 +55,7 @@ pub fn render_title<'a>(app: &App) -> Paragraph {
                 .title_alignment(Alignment::Center)
                 .borders(Borders::ALL), // .border_type(BorderType::Rounded),
         )
-        .style(Style::default().fg(Color::Yellow).bg(Color::Black))
+        .style(Style::default().fg(Color::Yellow).bg(Color::Reset))
         .alignment(Alignment::Center)
 }
 pub fn render_projects<'a>(app: &App) -> Table<'a> {
@@ -78,7 +85,13 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
             Block::default()
                 .title("(projects)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(Color::Yellow).bg(Color::Black))
+                .style(Style::default().fg(
+                    if app.window.base == BaseWindow::Project {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    }
+                ).bg(Color::Reset))
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
@@ -91,7 +104,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         .highlight_style(
             Style::default()
                 .bg(Color::Yellow)
-                .fg(Color::Black)
+                .fg(Color::Reset)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">>");
@@ -104,13 +117,13 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .style(
             Style::default()
                 .fg(
-                    Color::Yellow, // if app.state.window.base == BaseWindow::Todo {
-                                   // Color::Yellow
-                                   // } else {
-                                   // Color::White
-                                   // }
+                    if app.window.base == BaseWindow::Todo {
+                                   Color::Yellow
+                                   } else {
+                                   Color::White
+                                   }
                 )
-                .bg(Color::Black),
+                .bg(Color::Reset),
         )
         .title("(todo)")
         .border_type(BorderType::Plain);
@@ -130,14 +143,14 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .bg(
-                Color::Yellow, // if app.window.base == BaseWindow::Todo {
-                               // Color::Yellow
-                               // } else {
-                               // Color::White
-                               // }
+            .fg(
+                if app.window.base == BaseWindow::Todo {
+                               Color::Yellow
+                               } else {
+                               Color::White
+                               }
             )
-            .fg(Color::Black)
+            .bg(Color::Reset)
             .add_modifier(Modifier::BOLD),
     );
 
@@ -158,13 +171,13 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .style(
             Style::default()
                 .fg(
-                    Color::Yellow, // if app.window.base == BaseWindow::Description {
-                                   // Color::Yellow
-                                   // } else {
-                                   // Color::White
-                                   // }
+                     if app.window.base == BaseWindow::Description {
+                                   Color::Yellow
+                                   } else {
+                                   Color::White
+                                   }
                 )
-                .bg(Color::Black),
+                .bg(Color::Reset),
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false });

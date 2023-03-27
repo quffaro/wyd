@@ -15,7 +15,8 @@ fn main() -> AppResult<()> {
     initialize_db(&conn)?;
     // Create an application.
     let mut app = App::load();
-    app.projects.state.select(Some(0));
+    app.default_select();
+    
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;

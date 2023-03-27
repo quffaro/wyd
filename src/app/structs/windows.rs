@@ -7,7 +7,7 @@ use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Window {
     pub base: BaseWindow,
     pub popup: Popup,
@@ -33,6 +33,12 @@ impl Window {
             Mode::Insert => Color::Yellow,
             Mode::Normal => Color::Green,
         }
+    }
+    pub fn to_normal(&mut self) {
+        self.mode = Mode::Normal
+    }
+    pub fn to_insert(&mut self) {
+        self.mode = Mode::Insert
     }
     /// WINDOW RULES
     pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
