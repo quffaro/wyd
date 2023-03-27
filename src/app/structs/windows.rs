@@ -34,6 +34,18 @@ impl Window {
             Mode::Normal => Color::Green,
         }
     }
+    /// WINDOW RULES
+    pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
+        self.popup = popup;
+        match mode {
+            Some(m) => self.mode = m,
+            None => (),
+        }
+    }
+    pub fn close_popup(&mut self) {
+        self.popup = Popup::None;
+        self.status = WindowStatus::NotLoaded;
+    }
     pub fn base_focus_color(&self, window: BaseWindow) -> Color {
         match self {
             Window {

@@ -1,26 +1,26 @@
 use self::regex::regex_last_dir;
-use crate::app::structs::gitconfig::guess_git_owner;
 use crate::app::structs::{
+    gitconfig::guess_git_owner,
     projects::{Project, ProjectStatus},
     todos::Todo,
+    windows::{Mode, Popup, Window},
     FilteredListItems, ListNav, TableItems,
 };
+use crate::app::ui::{render_popup_todo, render_projects, render_title, render_todo_and_desc};
 use crate::sql::project::write_project;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
 use dirs::home_dir;
 use git2::Repository;
 use ratatui::backend::Backend;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::terminal::Frame;
-use ratatui::widgets::{
-    Block, BorderType, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap,
-};
 use rusqlite::Connection;
 use std::{env, error};
+use tui_input::Input;
 
 pub mod regex;
 pub mod structs;
+pub mod ui;
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
@@ -30,6 +30,8 @@ pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 pub struct App {
     /// Is the application running?
     pub running: bool,
+    pub input: Input,
+    pub window: Window,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
     pub desc: String,
@@ -39,6 +41,8 @@ impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
+            input: Input::default(),
+            window: Window::new(false),
             projects: TableItems::<Project>::default(),
             todos: FilteredListItems::<Todo>::default(),
             desc: "".to_owned(),
@@ -57,6 +61,8 @@ impl App {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         Self {
             running: true,
+            input: Input::default(),
+            window: Window::new(false),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
             desc: "".to_owned(),
@@ -78,34 +84,24 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Length(3),
-                    Constraint::Min(10),
-                    Constraint::Length(3),
-                    Constraint::Length(12),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(50),
+                    Constraint::Percentage(30),
+                    Constraint::Percentage(10),
                 ]
                 .as_ref(),
             )
             .split(size);
 
-        let title = Paragraph::new(
-            "This is a tui-rs template.\nPress `Esc`, `Ctrl-C` or `q` to stop running.",
-        )
-        .block(
-            Block::default()
-                .title("Template")
-                .title_alignment(Alignment::Center)
-                .borders(Borders::ALL), // .border_type(BorderType::Rounded),
-        )
-        .style(Style::default().fg(Color::Yellow).bg(Color::Black))
-        .alignment(Alignment::Center);
-
         // CHUNK 0
+        let title = render_title(&self);
         frame.render_widget(title, chunks[0]);
 
         // CHUNK 1
-        let projects = render_projects(self);
+        let projects = render_projects(&self);
         frame.render_stateful_widget(projects, chunks[1], &mut self.projects.state);
 
+        // CHUNK 2
         let project_info_chunk = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
@@ -114,7 +110,14 @@ impl App {
         let (todo_block, desc_block) = render_todo_and_desc(self);
         frame.render_stateful_widget(todo_block, project_info_chunk[0], &mut self.todos.state);
         frame.render_widget(desc_block, project_info_chunk[1]);
+
+        // POPUP
+        match self.window.popup {
+            Popup::AddTodo => render_popup_todo(self, frame),
+            _ => {}
+        }
     }
+    // TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
         let path = env::current_dir().unwrap().display().to_string();
         if is_find_git {
@@ -155,125 +158,10 @@ impl App {
             );
         }
     }
-}
-
-fn render_projects<'a>(app: &App) -> Table<'a> {
-    let home_dir = home_path(CONFIG_SEARCH_FOLDER);
-    let rows: Vec<Row> = app
-        .projects
-        .items
-        .iter()
-        .map(|p| {
-            Row::new(vec![
-                Cell::from(
-                    p.name
-                        .replace(&home_dir, "...")
-                        .replace(GITCONFIG_SUFFIX, "") // TODO into constant
-                        .clone(),
-                ),
-                Cell::from(p.category.to_string().clone()),
-                Cell::from(p.status.to_string().clone()),
-                Cell::from(p.last_commit.to_string().clone()),
-            ])
-        })
-        .collect();
-
-    let projects = Table::new(rows)
-        .style(Style::default().fg(Color::White))
-        .block(
-            Block::default()
-                .title("(projects)")
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::Yellow).bg(Color::Black))
-                .border_type(BorderType::Plain),
-        )
-        .header(Row::new(vec!["Name", "Cat", "Status", "Last Commit"]))
-        .widths(&[
-            Constraint::Percentage(40),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(40),
-        ])
-        .highlight_style(
-            Style::default()
-                .bg(Color::Yellow)
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(">>");
-
-    projects
-}
-fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
-    let todo_block = Block::default()
-        .borders(Borders::ALL)
-        .style(
-            Style::default()
-                .fg(
-                    Color::Yellow, // if app.state.window.base == BaseWindow::Todo {
-                                   // Color::Yellow
-                                   // } else {
-                                   // Color::White
-                                   // }
-                )
-                .bg(Color::Black),
-        )
-        .title("(todo)")
-        .border_type(BorderType::Plain);
-
-    let todo_items: Vec<ListItem> = app
-        .todos
-        .filtered
-        .iter()
-        .map(|t| {
-            if t.is_complete {
-                ListItem::new(format!("[x] {}", t.todo.clone()))
-            } else {
-                ListItem::new(format!("[ ] {}", t.todo.clone()))
-            }
-        })
-        .collect();
-
-    let left = List::new(todo_items).block(todo_block).highlight_style(
-        Style::default()
-            .bg(
-                Color::Yellow, // if app.window.base == BaseWindow::Todo {
-                               // Color::Yellow
-                               // } else {
-                               // Color::White
-                               // }
-            )
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let project_desc = match app.projects.get_state_selected() {
-        Some(i) => match app.projects.items.iter().nth(i) {
-            Some(p) => p.desc.to_owned(),
-            None => "".to_owned(),
-        },
-        None => "".to_owned(),
-    };
-
-    let right = Paragraph::new(project_desc)
-        .block(
-            Block::default()
-                .title("(description)")
-                .borders(Borders::ALL),
-        )
-        .style(
-            Style::default()
-                .fg(
-                    Color::Yellow, // if app.window.base == BaseWindow::Description {
-                                   // Color::Yellow
-                                   // } else {
-                                   // Color::White
-                                   // }
-                )
-                .bg(Color::Black),
-        )
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: false });
-
-    (left, right)
+    pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
+        self.window.popup(popup, mode)
+    }
+    pub fn close_popup(&mut self) {
+        self.window.close_popup()
+    }
 }
