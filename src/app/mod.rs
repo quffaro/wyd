@@ -178,7 +178,7 @@ fn render_projects<'a>(app: &App) -> Table<'a> {
         })
         .collect();
 
-    let projects = Table::new(vec![])
+    let projects = Table::new(rows)
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()

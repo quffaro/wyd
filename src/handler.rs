@@ -16,6 +16,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         }
         // Other handlers you could add here.
         KeyCode::Char('a') => app.add_project_in_dir(true),
+        KeyCode::Char('t') => app.add_todo(),
         _ => {}
     }
     Ok(())
