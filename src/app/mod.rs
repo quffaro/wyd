@@ -1,6 +1,14 @@
-use crate::app::structs::{projects::Project, todos::Todo, FilteredListItems, ListNav, TableItems};
+use self::regex::regex_last_dir;
+use crate::app::structs::gitconfig::guess_git_owner;
+use crate::app::structs::{
+    projects::{Project, ProjectStatus},
+    todos::Todo,
+    FilteredListItems, ListNav, TableItems,
+};
+use crate::sql::project::write_project;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
 use dirs::home_dir;
+use git2::Repository;
 use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
@@ -9,7 +17,7 @@ use ratatui::widgets::{
     Block, BorderType, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap,
 };
 use rusqlite::Connection;
-use std::error;
+use std::{env, error};
 
 pub mod regex;
 pub mod structs;
@@ -48,7 +56,7 @@ impl App {
     pub fn load() -> Self {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         Self {
-            running: false,
+            running: true,
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
             desc: "".to_owned(),
@@ -106,6 +114,46 @@ impl App {
         let (todo_block, desc_block) = render_todo_and_desc(self);
         frame.render_stateful_widget(todo_block, project_info_chunk[0], &mut self.todos.state);
         frame.render_widget(desc_block, project_info_chunk[1]);
+    }
+    pub fn add_project_in_dir(&mut self, is_find_git: bool) {
+        let path = env::current_dir().unwrap().display().to_string();
+        if is_find_git {
+            let repo = match git2::Repository::discover(path) {
+                Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+                _ => "N/A".to_string(),
+            };
+            write_project(
+                &Connection::open(home_path(PATH_DB)).unwrap(),
+                Project {
+                    id: 0,
+                    path: repo.clone(),
+                    name: regex_last_dir(repo.clone()),
+                    desc: "N/A".to_owned(),
+                    category: "Unknown".to_owned(),
+                    status: ProjectStatus::Unstable,
+                    is_git: true,
+                    owner: guess_git_owner(repo.clone()), //TODO
+                    repo: regex_last_dir(repo.clone()),
+                    last_commit: "N/A".to_owned(),
+                },
+            );
+        } else {
+            write_project(
+                &Connection::open(home_path(PATH_DB)).unwrap(),
+                Project {
+                    id: 0,
+                    path: path.clone(),
+                    name: regex_last_dir(path.clone()),
+                    desc: "N/A".to_owned(),
+                    category: "Unknown".to_owned(),
+                    status: ProjectStatus::Unstable,
+                    is_git: false,
+                    owner: "quffaro".to_owned(), //TODO
+                    repo: "".to_owned(),         //TODO should be null sql
+                    last_commit: "N/A".to_owned(),
+                },
+            );
+        }
     }
 }
 

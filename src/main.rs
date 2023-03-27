@@ -1,14 +1,20 @@
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use rusqlite::Connection;
 use std::io;
 use wyd::app::{App, AppResult};
 use wyd::event::{Event, EventHandler};
 use wyd::handler::handle_key_events;
+use wyd::sql::initialize_db;
 use wyd::tui::Tui;
+use wyd::{home_path, PATH_DB};
 
 fn main() -> AppResult<()> {
+    // intiialize db
+    let conn = Connection::open(home_path(PATH_DB)).unwrap();
+    initialize_db(&conn)?;
     // Create an application.
-    let mut app = App::new();
+    let mut app = App::load();
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());
