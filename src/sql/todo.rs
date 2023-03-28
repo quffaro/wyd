@@ -59,7 +59,7 @@ const UPDATE_TODO: &str = "insert or replace into todo (
     project_id,
     todo,
     is_complete,
-    priority,
+    priority
 ) values (?1, ?2, ?3, ?4, ?5, ?6);";
 pub fn update_todo(conn: &Connection, todo: &Todo) -> Result<(), rusqlite::Error> {
     let mut write_stmt = conn.prepare(UPDATE_TODO)?;

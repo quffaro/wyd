@@ -1,4 +1,4 @@
-use self::regex::regex_last_dir;
+use self::{regex::regex_last_dir, structs::{gitconfig::GitConfig, PlainListItems}};
 use crate::{app::structs::{
     gitconfig::guess_git_owner,
     projects::{Project, ProjectStatus},
@@ -7,7 +7,7 @@ use crate::{app::structs::{
     FilteredListItems, ListNav, TableItems,
 }, PAT};
 use crate::app::ui::{render_popup_todo, render_projects, render_title, render_todo_and_desc};
-use crate::sql::project::write_project;
+use crate::sql::project::{update_project_desc, write_project};
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
 use dirs::home_dir;
 use futures::stream::Filter;
@@ -35,6 +35,7 @@ pub struct App {
     pub window: Window,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
+    pub configs: TableItems<GitConfig>,
     pub desc: String,
 }
 
@@ -46,6 +47,7 @@ impl Default for App {
             window: Window::new(false),
             projects: TableItems::<Project>::default(),
             todos: FilteredListItems::<Todo>::default(),
+            configs: TableItems::<GitConfig>::default(),
             desc: "".to_owned(),
         }
     }
@@ -66,6 +68,7 @@ impl App {
             window: Window::new(false),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
+            configs: TableItems::<GitConfig>::load(&conn),
             desc: "".to_owned(),
         }
     }
@@ -96,11 +99,11 @@ impl App {
                 base: BaseWindow::Todo,
                 ..
             } => self.todos.next(),
-            // Window {
-            //     popup: Popup::SearchGitConfig,
-            //     base: _,
-            //     ..
-            // } => self.configs.next(),
+            Window {
+                popup: Popup::SearchGitConfigs,
+                base: _,
+                ..
+            } => self.configs.next(),
             // Window {
             //     popup: Popup::EditCategory,
             //     base: _,
@@ -133,11 +136,11 @@ impl App {
                 base: BaseWindow::Todo,
                 ..
             } => self.todos.previous(),
-            // Window {
-            //     popup: Popup::SearchGitConfig,
-            //     base: _,
-            //     ..
-            // } => self.configs.previous(),
+            Window {
+                popup: Popup::SearchGitConfigs,
+                base: _,
+                ..
+            } => self.configs.previous(),
             // Window {
             //     popup: Popup::EditCategory,
             //     base: _,
@@ -163,7 +166,7 @@ impl App {
     pub fn default_select(&mut self) {
         // TODO what if there aren't any?
         self.projects.state.select(Some(0));
-        // self.configs.state.select(Some(0));
+        self.configs.state.select(Some(0));
         // self.categories.state.select(Some(0));
 
         match self.projects.current() {
@@ -171,6 +174,38 @@ impl App {
             None => (),
         }
     }
+
+    // toggle
+    pub fn toggle(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        match self.window {
+            Window {
+                popup: Popup::None,
+                base: BaseWindow::Project,
+                ..
+            } => self.projects.toggle(&conn),
+            Window {
+                popup: Popup::None,
+                base: BaseWindow::Todo,
+                ..
+            } => self.todos.toggle(&conn),
+            Window {
+                popup: Popup::SearchGitConfigs,
+                base: _,
+                ..
+            } => self.configs.toggle(&conn),
+            // Window {
+            //     popup: Popup::EditCategory,
+            //     base: _,
+            //     ..
+            // } => match self.projects.current() {
+            //     Some(p) => self.categories.toggle(&self.conn, p),
+            //     None => {}
+            // },
+            _ => {}
+        }
+    }
+
 
     /// Renders the user interface widgets.
     pub fn render<B: Backend>(&mut self, frame: &mut Frame<'_, B>) {
@@ -214,7 +249,9 @@ impl App {
 
         // POPUP
         match self.window.popup {
-            Popup::AddTodo => render_popup_todo(self, frame),
+            Popup::AddTodo => crate::app::ui::render_popup_todo(self, frame),
+            Popup::EditDesc => crate::app::ui::render_popup_edit_desc(self, frame),
+            Popup::SearchGitConfigs => crate::app::ui::render_popup_search_config(self, frame),
             _ => {}
         }
     }
@@ -297,9 +334,30 @@ impl App {
         self.todos.select_filter_state(Some(0), project_id);
     }
 
+    fn update_project_desc(&mut self, conn: &Connection) {
+        let pid = match self.projects.current() {
+            Some(p) => p.id,
+            None => 0,
+        };
+        crate::sql::project::update_project_desc(
+            conn,
+            pid,
+            self.input.value().to_owned()
+        );
+
+        self.projects = TableItems::<Project>::load(conn);
+    }
+
     pub fn write_close_new_todo(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         self.write_todo(&conn);
+        self.default_input();
+        self.close_popup();
+    }
+
+    pub fn write_close_description(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        self.update_project_desc(&conn);
         self.default_input();
         self.close_popup();
     }

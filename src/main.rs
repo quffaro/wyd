@@ -1,6 +1,8 @@
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use rusqlite::Connection;
+use wyd::app::structs::gitconfig::fetch_config_files;
+use wyd::sql::tmp_config::write_tmp;
 use std::io;
 use wyd::app::{App, AppResult};
 use wyd::event::{Event, EventHandler};
@@ -13,10 +15,17 @@ fn main() -> AppResult<()> {
     // intiialize db
     let conn = Connection::open(home_path(PATH_DB)).unwrap();
     initialize_db(&conn)?;
+    
+    {
+        let tmp = fetch_config_files();
+        // dbg!(&tmp);
+        write_tmp(&conn, tmp);
+    }
+
     // Create an application.
     let mut app = App::load();
     app.default_select();
-    
+
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;

@@ -93,10 +93,10 @@ pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite
 const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
 pub fn update_project_desc(
     conn: &Connection,
-    project: &Project,
+    pid: u8,
     desc: String,
 ) -> Result<(), rusqlite::Error> {
-    conn.execute(UPDATE_PROJECT_DESC, (desc, &project.id))
+    conn.execute(UPDATE_PROJECT_DESC, (desc, pid))
         .expect("A");
 
     Ok(())

@@ -45,7 +45,7 @@ pub async fn request_string() -> Result<()> {
 
 pub async fn request(owner: &String, project: &Project) -> Result<serde_json::Value> {
     // TODO this needs better error handling...
-    let mut secret = fs::read_to_string(home_path(PAT)).expect("A");
+    let mut secret = fs::read_to_string(home_path(PATH_PAT)).expect("A");
     secret.pop();
 
     let mut headers = header::HeaderMap::new();

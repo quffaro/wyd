@@ -16,6 +16,7 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 app.running = false;
             }
         }
+        KeyCode::Enter => app.toggle(),
         KeyCode::Right => app.cycle_focus_next(),
         KeyCode::Left => app.cycle_focus_previous(),
         KeyCode::Up => app.previous(),
@@ -23,6 +24,8 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
         // Other handlers you could add here.
         KeyCode::Char('a') => app.add_project_in_dir(true),
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
+        KeyCode::Char('y') => app.popup(Popup::EditDesc,  Some(Mode::Insert)),
+        KeyCode::Char('p') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
         _ => {}
     }
 }

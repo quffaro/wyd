@@ -24,7 +24,7 @@ pub const PATH_DB: &str = formatcp!("{}{}", CONFIG, DB);
 
 pub const GITCONFIG_SUFFIX: &str = ".git/config";
 pub const GLOB_GITCONFIG_SUFFIX: &str = formatcp!("**/{}", GITCONFIG_SUFFIX);
-pub const CONFIG_SEARCH_FOLDER: &str = "/Documents/";
+pub const CONFIG_SEARCH_FOLDER: &str = "~/Documents/";
 
 pub fn home_path(path: &str) -> String {
     format!(
