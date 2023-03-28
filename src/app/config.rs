@@ -1,9 +1,9 @@
 use ini::Ini; 
-use crate::library::code::{Config, IN_HOME_CONFIG, home_path};
+use crate::{app::structs::config::Config, PATH_CONFIG, home_path};
 
 
 pub fn load_config() -> Option<Config> {
-    match Ini::load_from_file(home_path(IN_HOME_CONFIG)) {
+    match Ini::load_from_file(home_path(PATH_CONFIG)) {
         Ok(config) => Some(
             Config { 
                 owner: config.get_from(Some("user"), "owner").unwrap().to_owned(), 
@@ -22,6 +22,6 @@ pub fn init_config(config: Config) {
         .set("search_folder", config.search_folder)
         .set("db", config.db);
 
-    conf.write_to_file(home_path(IN_HOME_CONFIG)).unwrap();
+    conf.write_to_file(home_path(PATH_CONFIG)).unwrap();
     
 }

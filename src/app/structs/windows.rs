@@ -102,7 +102,7 @@ impl PlainListItems<BaseWindow> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Popup {
     None,
     SearchGitConfigs,

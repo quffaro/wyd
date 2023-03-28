@@ -1,24 +1,29 @@
-use self::{regex::regex_last_dir, structs::{gitconfig::GitConfig, PlainListItems}};
-use crate::{app::structs::{
-    gitconfig::guess_git_owner,
-    projects::{Project, ProjectStatus},
-    todos::Todo,
-    windows::{Mode, Popup, Window, BaseWindow},
-    FilteredListItems, ListNav, TableItems,
-}, PAT};
+use self::{
+    regex::regex_last_dir,
+    structs::{gitconfig::GitConfig, PlainListItems},
+};
 use crate::app::ui::{render_popup_todo, render_projects, render_title, render_todo_and_desc};
 use crate::sql::project::{update_project_desc, write_project};
-use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, PATH_DB};
-use dirs::home_dir;
-use futures::stream::Filter;
-use git2::Repository;
+use crate::{
+    app::structs::{
+        category::Category,
+        gitconfig::guess_git_owner,
+        projects::{Project, ProjectStatus},
+        todos::Todo,
+        windows::{BaseWindow, Mode, Popup, Window},
+        FilteredListItems, ListNav, TableItems,
+    },
+    PATH_PAT,
+};
+use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::terminal::Frame;
 use rusqlite::Connection;
-use std::{env, error};
+use std::error;
 use tui_input::Input;
 
+pub mod config;
 pub mod regex;
 pub mod structs;
 pub mod ui;
@@ -32,10 +37,12 @@ pub struct App {
     /// Is the application running?
     pub running: bool,
     pub input: Input,
+    pub is_popup_loading: bool,
     pub window: Window,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
     pub configs: TableItems<GitConfig>,
+    pub categories: PlainListItems<Category>,
     pub desc: String,
 }
 
@@ -44,10 +51,12 @@ impl Default for App {
         Self {
             running: true,
             input: Input::default(),
+            is_popup_loading: false,
             window: Window::new(false),
             projects: TableItems::<Project>::default(),
             todos: FilteredListItems::<Todo>::default(),
             configs: TableItems::<GitConfig>::default(),
+            categories: PlainListItems::<Category>::default(),
             desc: "".to_owned(),
         }
     }
@@ -65,10 +74,12 @@ impl App {
         Self {
             running: true,
             input: Input::default(),
+            is_popup_loading: false,
             window: Window::new(false),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
             configs: TableItems::<GitConfig>::load(&conn),
+            categories: PlainListItems::<Category>::load(&conn),
             desc: "".to_owned(),
         }
     }
@@ -104,11 +115,11 @@ impl App {
                 base: _,
                 ..
             } => self.configs.next(),
-            // Window {
-            //     popup: Popup::EditCategory,
-            //     base: _,
-            //     ..
-            // } => self.categories.next(),
+            Window {
+                popup: Popup::EditCat,
+                base: _,
+                ..
+            } => self.categories.next(),
             _ => {}
         }
     }
@@ -141,11 +152,11 @@ impl App {
                 base: _,
                 ..
             } => self.configs.previous(),
-            // Window {
-            //     popup: Popup::EditCategory,
-            //     base: _,
-            //     ..
-            // } => self.categories.previous(),
+            Window {
+                popup: Popup::EditCat,
+                base: _,
+                ..
+            } => self.categories.previous(),
             _ => {}
         }
     }
@@ -167,7 +178,7 @@ impl App {
         // TODO what if there aren't any?
         self.projects.state.select(Some(0));
         self.configs.state.select(Some(0));
-        // self.categories.state.select(Some(0));
+        self.categories.state.select(Some(0));
 
         match self.projects.current() {
             Some(p) => self.todos.select_filter_state(Some(0), p.id),
@@ -194,18 +205,17 @@ impl App {
                 base: _,
                 ..
             } => self.configs.toggle(&conn),
-            // Window {
-            //     popup: Popup::EditCategory,
-            //     base: _,
-            //     ..
-            // } => match self.projects.current() {
-            //     Some(p) => self.categories.toggle(&self.conn, p),
-            //     None => {}
-            // },
+            Window {
+                popup: Popup::EditCat,
+                base: _,
+                ..
+            } => match self.projects.current() {
+                Some(p) => self.categories.toggle(&conn, p),
+                None => {}
+            },
             _ => {}
         }
     }
-
 
     /// Renders the user interface widgets.
     pub fn render<B: Backend>(&mut self, frame: &mut Frame<'_, B>) {
@@ -220,8 +230,8 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(50),
+                    Constraint::Percentage(05),
+                    Constraint::Percentage(55),
                     Constraint::Percentage(30),
                     Constraint::Percentage(10),
                 ]
@@ -252,66 +262,35 @@ impl App {
             Popup::AddTodo => crate::app::ui::render_popup_todo(self, frame),
             Popup::EditDesc => crate::app::ui::render_popup_edit_desc(self, frame),
             Popup::SearchGitConfigs => crate::app::ui::render_popup_search_config(self, frame),
+            Popup::Help => crate::app::ui::render_popup_help_table(self, frame),
+            Popup::NewCat => crate::app::ui::render_popup_new_cat(self, frame),
+            Popup::EditCat => crate::app::ui::render_popup_new_cat(self, frame),
             _ => {}
         }
     }
-    
+
     /// TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
-        let path = env::current_dir().unwrap().display().to_string();
-        if is_find_git {
-            let repo = match git2::Repository::discover(path) {
-                Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
-                _ => "N/A".to_string(),
-            };
-            write_project(
-                &Connection::open(home_path(PATH_DB)).unwrap(),
-                Project {
-                    id: 0,
-                    path: repo.clone(),
-                    name: regex_last_dir(repo.clone()),
-                    desc: "N/A".to_owned(),
-                    category: "Unknown".to_owned(),
-                    status: ProjectStatus::Unstable,
-                    is_git: true,
-                    owner: guess_git_owner(repo.clone()), //TODO
-                    repo: regex_last_dir(repo.clone()),
-                    last_commit: "N/A".to_owned(),
-                },
-            );
-        } else {
-            write_project(
-                &Connection::open(home_path(PATH_DB)).unwrap(),
-                Project {
-                    id: 0,
-                    path: path.clone(),
-                    name: regex_last_dir(path.clone()),
-                    desc: "N/A".to_owned(),
-                    category: "Unknown".to_owned(),
-                    status: ProjectStatus::Unstable,
-                    is_git: false,
-                    owner: "quffaro".to_owned(), //TODO
-                    repo: "".to_owned(),         //TODO should be null sql
-                    last_commit: "N/A".to_owned(),
-                },
-            );
-        }
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        crate::sql::project::add_project_in_dir(is_find_git, &conn)
     }
-    
+
     // POPUP RULES
     pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
+        self.is_popup_loading = true;
         self.window.popup(popup, mode)
     }
     pub fn close_popup(&mut self) {
+        self.is_popup_loading = false;
         self.window.close_popup()
     }
-    
+
     // INPUT RULES
     pub fn default_input(&mut self) {
         self.input = Input::default()
     }
-    
-    // SQL RULES 
+
+    // SQL RULES
     fn write_todo(&mut self, conn: &Connection) {
         let project_id = match self.projects.current() {
             Some(p) => p.id,
@@ -339,11 +318,7 @@ impl App {
             Some(p) => p.id,
             None => 0,
         };
-        crate::sql::project::update_project_desc(
-            conn,
-            pid,
-            self.input.value().to_owned()
-        );
+        crate::sql::project::update_project_desc(conn, pid, self.input.value().to_owned());
 
         self.projects = TableItems::<Project>::load(conn);
     }
@@ -358,6 +333,48 @@ impl App {
     pub fn write_close_description(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         self.update_project_desc(&conn);
+        self.default_input();
+        self.close_popup();
+    }
+
+    pub fn write_close_gitconfig(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        crate::sql::tmp_config::write_tmp_to_project(&conn);
+        self.projects = TableItems::<Project>::load(&conn);
+        self.default_input();
+        self.close_popup();
+    }
+
+    pub fn write_close_new_category(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        match self.projects.current() {
+            Some(p) => {
+                let category = self.categories.current().unwrap().to_string();
+                crate::sql::category::write_category(&conn, &self.input.value().to_owned());
+                // TODO needs to work if above write is successful
+                crate::sql::project::update_project_category(&conn, p, &category);
+                self.categories = PlainListItems::<Category>::load(&conn);
+                self.projects = TableItems::<Project>::load(&conn);
+                self.default_select();
+            },
+            _ => {}
+        } 
+        self.default_input();
+        self.close_popup();
+    }
+
+    pub fn write_close_edit_category(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        match self.projects.current() {
+            Some(p) => {
+                let category = self.categories.current().unwrap().name.to_string();
+                crate::sql::project::update_project_category(&conn, p, &category);
+                self.categories = PlainListItems::<Category>::load(&conn);
+                self.projects = TableItems::<Project>::load(&conn);
+                self.default_select();
+            },
+            _ => {}
+        }
         self.default_input();
         self.close_popup();
     }

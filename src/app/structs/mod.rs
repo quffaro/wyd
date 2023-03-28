@@ -1,5 +1,7 @@
 use ratatui::widgets::{ListState, TableState};
 
+pub mod category;
+pub mod config;
 pub mod gitconfig;
 pub mod projects;
 pub mod todos;

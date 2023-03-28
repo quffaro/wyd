@@ -1,8 +1,8 @@
-use tui_input::backend::crossterm::EventHandler;
-use tui_input::Input;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-
-use crate::app::{App, structs::{windows::{Popup, Mode}}};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::app::{
+    structs::windows::{Mode, Popup},
+    App,
+};
 
 pub fn handle_base(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
@@ -22,10 +22,13 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
         KeyCode::Up => app.previous(),
         KeyCode::Down => app.next(),
         // Other handlers you could add here.
-        KeyCode::Char('a') => app.add_project_in_dir(true),
+        KeyCode::Char('A') => app.add_project_in_dir(true),
+        KeyCode::Char('r') => app.popup(Popup::EditCat, Some(Mode::Insert)),
+        KeyCode::Char('R') => app.popup(Popup::NewCat, None),
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
-        KeyCode::Char('y') => app.popup(Popup::EditDesc,  Some(Mode::Insert)),
+        KeyCode::Char('y') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
         KeyCode::Char('p') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
+        KeyCode::Char('h') => app.popup(Popup::Help, None),
         _ => {}
     }
 }

@@ -90,7 +90,7 @@ pub struct App<'a> {
     pub configs: TableItems<GitConfig>,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
-    pub categories: ListItems<Category>,
+    pub categories: PlainListItems<Category>,
 }
 
 impl<'a> App<'a> {
@@ -114,7 +114,7 @@ impl<'a> App<'a> {
             configs: TableItems::<GitConfig>::load(&conn),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
-            categories: ListItems::<Category>::load(&conn),
+            categories: PlainListItems::<Category>::load(&conn),
         };
         match load_config() {
             Some(config) => app.config = Some(config),
@@ -253,7 +253,7 @@ impl App<'_> {
     /// WINDOW RULES
     pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
         self.window.popup = popup;
-        atch mode {
+        match mode {
             Some(m) => self.window.mode = m,
             None => (),
         }

@@ -3,6 +3,7 @@ use rusqlite::Connection;
 pub mod project;
 pub mod tmp_config;
 pub mod todo;
+pub mod category;
 
 const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     id          integer primary key autoincrement, 
