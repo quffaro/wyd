@@ -1,6 +1,7 @@
 use crate::app::structs::todos::Todo;
 use rusqlite::{params, Connection, Result};
 
+/// TODOs
 const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     id          integer primary key autoincrement,
     parent_id   integer,
@@ -9,7 +10,6 @@ const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     is_complete tinyint(1) default 0,
     priority    integer default 1
 );";
-/// TODOs
 const READ_TODO: &str = "select id,parent_id,project_id,todo,is_complete,priority from todo";
 pub fn read_todo(conn: &Connection) -> Result<Vec<Todo>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_TODO)?;

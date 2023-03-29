@@ -147,7 +147,6 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
             };
             write_project(
                 conn,
-                // &Connection::open(home_path(PATH_DB)).unwrap(),
                 Project {
                     id: 0,
                     path: repo.clone(),
@@ -164,7 +163,6 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
         } else {
             write_project(
                 conn,
-                // &Connection::open(home_path(PATH_DB)).unwrap(),
                 Project {
                     id: 0,
                     path: path.clone(),

@@ -1,4 +1,4 @@
-use crate::app::config::load_config;
+use crate::app::structs::config::load_config;
 use crate::sql::project::{read_project_repos, update_project_last_commit};
 use crate::{app::structs::projects::Project, home_path, PATH_DB, PATH_PAT};
 use reqwest::{header, ClientBuilder, Result};

@@ -1,20 +1,15 @@
-use self::{
-    regex::regex_last_dir,
-    structs::{gitconfig::GitConfig, PlainListItems},
+use self::structs::{gitconfig::GitConfig, PlainListItems};
+use crate::app::structs::{
+    category::Category,
+    projects::Project,
+    todos::Todo,
+    windows::{BaseWindow, Mode, Popup, Window},
+    FilteredListItems, ListNav, TableItems,
 };
-use crate::app::ui::{render_popup_todo, render_projects, render_title, render_todo_and_desc};
+use crate::app::ui::{
+    render_loading, render_popup_todo, render_projects, render_title, render_todo_and_desc,
+};
 use crate::sql::project::{update_project_desc, write_project};
-use crate::{
-    app::structs::{
-        category::Category,
-        gitconfig::guess_git_owner,
-        projects::{Project, ProjectStatus},
-        todos::Todo,
-        windows::{BaseWindow, Mode, Popup, Window},
-        FilteredListItems, ListNav, TableItems,
-    },
-    PATH_PAT,
-};
 use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -23,7 +18,6 @@ use rusqlite::Connection;
 use std::error;
 use tui_input::Input;
 
-pub mod config;
 pub mod regex;
 pub mod structs;
 pub mod ui;
@@ -31,14 +25,38 @@ pub mod ui;
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
+#[derive(Debug, Clone, Copy)]
+pub struct JobRoster {
+    pub gitcommit: LoadingState,
+    pub gitconfig: LoadingState,
+}
+
+impl JobRoster {
+    pub fn new() -> Self {
+        Self {
+            gitcommit: LoadingState::Loading,
+            gitconfig: LoadingState::Loading,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub enum LoadingState {
+    Loading,
+    Finished,
+}
+
 /// Application.
 #[derive(Debug)]
 pub struct App {
     /// Is the application running?
     pub running: bool,
+    pub msg: String,
     pub input: Input,
     pub is_popup_loading: bool,
     pub window: Window,
+    pub jobs: JobRoster,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
     pub configs: TableItems<GitConfig>,
@@ -50,9 +68,11 @@ impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
+            msg: "Nothing".to_owned(),
             input: Input::default(),
             is_popup_loading: false,
-            window: Window::new(false),
+            window: Window::load(),
+            jobs: JobRoster::new(),
             projects: TableItems::<Project>::default(),
             todos: FilteredListItems::<Todo>::default(),
             configs: TableItems::<GitConfig>::default(),
@@ -73,9 +93,11 @@ impl App {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         Self {
             running: true,
+            msg: "Nothing".to_owned(),
             input: Input::default(),
             is_popup_loading: false,
-            window: Window::new(false),
+            window: Window::load(),
+            jobs: JobRoster::new(),
             projects: TableItems::<Project>::load(&conn),
             todos: FilteredListItems::<Todo>::load(&conn),
             configs: TableItems::<GitConfig>::load(&conn),
@@ -230,10 +252,10 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Percentage(05),
-                    Constraint::Percentage(55),
-                    Constraint::Percentage(30),
                     Constraint::Percentage(10),
+                    Constraint::Percentage(50),
+                    Constraint::Percentage(30),
+                    Constraint::Length(1),
                 ]
                 .as_ref(),
             )
@@ -257,6 +279,10 @@ impl App {
         frame.render_stateful_widget(todo_block, project_info_chunk[0], &mut self.todos.state);
         frame.render_widget(desc_block, project_info_chunk[1]);
 
+        // CHUNK 3
+        let loading = render_loading(self);
+        frame.render_widget(loading, chunks[3]);
+
         // POPUP
         match self.window.popup {
             Popup::AddTodo => crate::app::ui::render_popup_todo(self, frame),
@@ -265,6 +291,7 @@ impl App {
             Popup::Help => crate::app::ui::render_popup_help_table(self, frame),
             Popup::NewCat => crate::app::ui::render_popup_new_cat(self, frame),
             Popup::EditCat => crate::app::ui::render_popup_new_cat(self, frame),
+            Popup::Config => crate::app::ui::render_popup_wyd_confg(self, frame),
             _ => {}
         }
     }
@@ -356,9 +383,9 @@ impl App {
                 self.categories = PlainListItems::<Category>::load(&conn);
                 self.projects = TableItems::<Project>::load(&conn);
                 self.default_select();
-            },
+            }
             _ => {}
-        } 
+        }
         self.default_input();
         self.close_popup();
     }
@@ -372,7 +399,7 @@ impl App {
                 self.categories = PlainListItems::<Category>::load(&conn);
                 self.projects = TableItems::<Project>::load(&conn);
                 self.default_select();
-            },
+            }
             _ => {}
         }
         self.default_input();

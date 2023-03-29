@@ -1,4 +1,5 @@
 use crate::app::AppResult;
+use crate::request::request_commit;
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
 use std::sync::mpsc;
 use std::thread;
@@ -15,6 +16,8 @@ pub enum Event {
     Mouse(MouseEvent),
     /// Terminal resize.
     Resize(u16, u16),
+    /// GitHub call completes
+    RequestComplete,
 }
 
 /// Terminal event handler.
@@ -35,7 +38,7 @@ impl EventHandler {
         let tick_rate = Duration::from_millis(tick_rate);
         let (sender, receiver) = mpsc::channel();
         let handler = {
-            let sender = sender.clone();
+            let sender_crossterm = sender.clone();
             thread::spawn(move || {
                 let mut last_tick = Instant::now();
                 loop {
@@ -45,18 +48,26 @@ impl EventHandler {
 
                     if event::poll(timeout).expect("no events available") {
                         match event::read().expect("unable to read event") {
-                            CrosstermEvent::Key(e) => sender.send(Event::Key(e)),
-                            CrosstermEvent::Mouse(e) => sender.send(Event::Mouse(e)),
-                            CrosstermEvent::Resize(w, h) => sender.send(Event::Resize(w, h)),
+                            CrosstermEvent::Key(e) => sender_crossterm.send(Event::Key(e)),
+                            CrosstermEvent::Mouse(e) => sender_crossterm.send(Event::Mouse(e)),
+                            CrosstermEvent::Resize(w, h) => sender_crossterm.send(Event::Resize(w, h)),
                             _ => unimplemented!(),
                         }
                         .expect("failed to send terminal event")
                     }
 
                     if last_tick.elapsed() >= tick_rate {
-                        sender.send(Event::Tick).expect("failed to send tick event");
+                        sender_crossterm.send(Event::Tick).expect("failed to send tick event");
                         last_tick = Instant::now();
                     }
+                }
+            });
+            // NEW EVENT GOES HERE I THINK
+            let sender_request = sender.clone();
+            thread::spawn(move || {
+                match request_commit() {
+                    Ok(_) => {sender_request.send(Event::RequestComplete);},
+                    Err(_) => {},
                 }
             })
         };

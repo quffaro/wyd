@@ -1,5 +1,6 @@
 use crate::app::{
     structs::{
+        config::{init_config, load_config, Config},
         todos::Todo,
         windows::{Mode, Popup, Window},
     },
@@ -145,6 +146,46 @@ pub fn handle_popup_help(key_event: KeyEvent, app: &mut App) {
     }
 }
 
+pub fn handle_popup_wyd_config(key_event: KeyEvent, app: &mut App) {
+    match app.window.mode {
+        Mode::Insert => match key_event {
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } => app.window.to_normal(),
+            event => {
+                app.input.handle_event(&Event::Key(event));
+            }
+        },
+        /* COMMON */
+        Mode::Normal => match key_event {
+            KeyEvent {
+                code: KeyCode::Char('i'),
+                ..
+            } => app.window.to_insert(),
+            KeyEvent {
+                code: KeyCode::Char('w'),
+                ..
+            } => {
+                crate::app::structs::config::init_config(crate::app::structs::config::Config {
+                    owner: app.input.value().to_owned(),
+                    search_folder: crate::home_path(crate::PATH_CONFIG),
+                    db: crate::home_path(crate::PATH_DB),
+                });
+                app.default_input();
+                app.close_popup();
+            }
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                ..
+            } => {
+                app.default_input();
+                app.close_popup();
+            }
+            _ => {}
+        },
+    }
+}
+
 pub fn handle_popup_edit_cat(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
         // Mode::Insert => {
@@ -177,7 +218,8 @@ pub fn handle_popup_edit_cat(key_event: KeyEvent, app: &mut App) {
             KeyEvent {
                 code: KeyCode::Char('w'),
                 ..
-            } | KeyEvent {
+            }
+            | KeyEvent {
                 code: KeyCode::Enter,
                 ..
             } => app.write_close_edit_category(), /* TODO */

@@ -31,6 +31,9 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         Window {
             popup: Popup::NewCat, .. 
         } => popup::handle_popup_edit_cat(key_event, app),
+        Window {
+            popup: Popup::Config, ..
+        } => popup::handle_popup_wyd_config(key_event, app),
         _ => base::handle_base(key_event, app),
     }
 

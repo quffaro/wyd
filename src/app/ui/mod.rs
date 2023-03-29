@@ -12,7 +12,34 @@ use ratatui::widgets::{
     Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
 };
 
+use super::LoadingState;
+
 pub fn main_ui<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {}
+
+pub fn render_popup_wyd_confg<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
+    let size = frame.size();
+    let area = centered_rect(40, 10, size);
+    frame.render_widget(Clear, area);
+
+    let (owner, directory) = centered_rect_config(40, 10, size);
+
+    // OWNER
+    let text = Paragraph::new(app.input.value())
+        .style(Style::default().fg(match app.window.mode {
+            Mode::Insert => Color::Yellow,
+            Mode::Normal => Color::Green,
+        }))
+        .wrap(Wrap { trim: false })
+        .block(
+            Block::default()
+                .title("(what is your gh username?)")
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL),
+        );
+
+    // SEARCH DIRECTORY
+    frame.render_widget(text, area);
+}
 
 pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
     match app.projects.current() {
@@ -53,12 +80,13 @@ pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_,
             frame.render_stateful_widget(category_list, big, &mut app.categories.state);
 
             let text = Paragraph::new(app.input.value())
-                .style(Style::default().fg(match (app.window.popup, app.window.mode) {
-                    (Popup::NewCat, Mode::Insert) => Color::Yellow,
-                    (Popup::NewCat, Mode::Normal) => Color::Green,
-                    _ => Color::Gray
-                }
-            ))
+                .style(
+                    Style::default().fg(match (app.window.popup, app.window.mode) {
+                        (Popup::NewCat, Mode::Insert) => Color::Yellow,
+                        (Popup::NewCat, Mode::Normal) => Color::Green,
+                        _ => Color::Gray,
+                    }),
+                )
                 .wrap(Wrap { trim: false })
                 .block(
                     Block::default()
@@ -271,11 +299,11 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
     }
 }
 
-pub fn render_title<'a>(_app: &App) -> Paragraph {
+pub fn render_title<'a>(app: &App) -> Paragraph {
     Paragraph::new("This is a tui-rs template.")
         .block(
             Block::default()
-                .title("(wyd)")
+                .title(format!("(wyd): {}", app.msg))
                 .title_alignment(Alignment::Left)
                 .borders(Borders::ALL), // .border_type(BorderType::Rounded),
         )
@@ -407,6 +435,34 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     (left, right)
 }
 
+pub fn render_loading<'a>(app: &App) -> Paragraph {
+    let (text, state) = display_loading_gitcommit(app);
+    let loading = Paragraph::new(text)
+        .block(
+            Block::default()
+                // .title(format!("(wyd): {}", app.msg))
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL), // .border_type(BorderType::Rounded),
+        )
+        .style(Style::default().fg(match state {LoadingState::Loading => Color::Yellow, LoadingState::Finished => Color::Green }).bg(Color::Reset))
+        .alignment(Alignment::Left);
+
+    loading
+}
+
+fn display_loading_gitcommit<'a>(app: &App) -> (&str, LoadingState) {
+    match app.jobs.gitcommit {
+        super::LoadingState::Loading => match rand::random::<u8>() % 5 {
+            0 => ("⠾ loading commits...", LoadingState::Loading),
+            1 => ("⠽ loading commits...", LoadingState::Loading),
+            2 => ("⠻ loading commits...", LoadingState::Loading),
+            3 => ("⠯ loading commits...", LoadingState::Loading),
+            _ => ("⠷ loading commits...", LoadingState::Loading),
+        },
+        _ => ("LOADED!", LoadingState::Finished),
+    }
+}
+
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -462,6 +518,39 @@ pub fn centered_rect_category(percent_x: u16, percent_y: u16, r: Rect) -> (Rect,
     let y = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(85), Constraint::Length(15)])
+        .split(popup);
+
+    (y[0], y[1])
+}
+
+fn centered_rect_config(percent_x: u16, percent_y: u16, r: Rect) -> (Rect, Rect) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    let popup = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1];
+
+    let y = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(85), Constraint::Percentage(15)])
         .split(popup);
 
     (y[0], y[1])
