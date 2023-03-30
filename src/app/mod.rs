@@ -1,10 +1,11 @@
-use self::structs::{gitconfig::GitConfig, PlainListItems};
-use crate::app::structs::{
+use self::structs::{
     category::Category,
+    gitconfig::GitConfig,
     projects::Project,
     todos::Todo,
+    config::{Config, load_config},
     windows::{BaseWindow, Mode, Popup, Window},
-    FilteredListItems, ListNav, TableItems,
+    FilteredListItems, ListNav, PlainListItems, TableItems,
 };
 use crate::app::ui::{
     render_loading, render_popup_todo, render_projects, render_title, render_todo_and_desc,
@@ -40,7 +41,6 @@ impl JobRoster {
     }
 }
 
-
 #[derive(Debug, Clone, Copy)]
 pub enum LoadingState {
     Loading,
@@ -55,29 +55,47 @@ pub struct App {
     pub msg: String,
     pub input: Input,
     pub is_popup_loading: bool,
+    pub config: Option<Config>,
     pub window: Window,
     pub jobs: JobRoster,
     pub projects: TableItems<Project>,
     pub todos: FilteredListItems<Todo>,
     pub configs: TableItems<GitConfig>,
     pub categories: PlainListItems<Category>,
-    pub desc: String,
+    // pub desc: String,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self {
-            running: true,
-            msg: "Nothing".to_owned(),
-            input: Input::default(),
-            is_popup_loading: false,
-            window: Window::load(),
-            jobs: JobRoster::new(),
-            projects: TableItems::<Project>::default(),
-            todos: FilteredListItems::<Todo>::default(),
-            configs: TableItems::<GitConfig>::default(),
-            categories: PlainListItems::<Category>::default(),
-            desc: "".to_owned(),
+        match load_config() {
+            Some(c) => App {
+                running: true,
+                msg: "Nothing".to_owned(),
+                input: Input::default(),
+                is_popup_loading: false,
+                config: Some(c),
+                window: Window::load(true),
+                jobs: JobRoster::new(),
+                projects: TableItems::<Project>::default(),
+                todos: FilteredListItems::<Todo>::default(),
+                configs: TableItems::<GitConfig>::default(),
+                categories: PlainListItems::<Category>::default(),
+                // desc: "".to_owned(),
+            },
+            None => App {
+                running: true,
+                msg: "Nothing".to_owned(),
+                input: Input::default(),
+                is_popup_loading: false,
+                config: None,
+                window: Window::load(false),
+                jobs: JobRoster::new(),
+                projects: TableItems::<Project>::default(),
+                todos: FilteredListItems::<Todo>::default(),
+                configs: TableItems::<GitConfig>::default(),
+                categories: PlainListItems::<Category>::default(),
+                // desc: "".to_owned(),
+            },
         }
     }
 }
@@ -91,19 +109,37 @@ impl App {
     /// Loads data into the app
     pub fn load() -> Self {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        Self {
-            running: true,
-            msg: "Nothing".to_owned(),
-            input: Input::default(),
-            is_popup_loading: false,
-            window: Window::load(),
-            jobs: JobRoster::new(),
-            projects: TableItems::<Project>::load(&conn),
-            todos: FilteredListItems::<Todo>::load(&conn),
-            configs: TableItems::<GitConfig>::load(&conn),
-            categories: PlainListItems::<Category>::load(&conn),
-            desc: "".to_owned(),
+        match load_config() {
+            Some(c) => Self {
+                running: true,
+                msg: "Nothing".to_owned(),
+                input: Input::default(),
+                is_popup_loading: false,
+                config: Some(c),
+                window: Window::load(true),
+                jobs: JobRoster::new(),
+                projects: TableItems::<Project>::load(&conn),
+                todos: FilteredListItems::<Todo>::load(&conn),
+                configs: TableItems::<GitConfig>::load(&conn),
+                categories: PlainListItems::<Category>::load(&conn),
+                // desc: "".to_owned(),
+            },
+            None => Self {
+                running: true,
+                msg: "Nothing".to_owned(),
+                input: Input::default(),
+                is_popup_loading: false,
+                config: None,
+                window: Window::load(false),
+                jobs: JobRoster::new(),
+                projects: TableItems::<Project>::load(&conn),
+                todos: FilteredListItems::<Todo>::load(&conn),
+                configs: TableItems::<GitConfig>::load(&conn),
+                categories: PlainListItems::<Category>::load(&conn),
+                // desc: "".to_owned(),
+            }
         }
+        
     }
 
     pub fn reload(&mut self) {
@@ -113,7 +149,8 @@ impl App {
     }
 
     pub fn finish_github_request(&mut self) {
-        self.jobs.gitcommit = crate::app::LoadingState::Finished; self.reload();
+        self.jobs.gitcommit = crate::app::LoadingState::Finished;
+        self.reload();
     }
 
     /// Handles the tick event of the terminal.
@@ -263,10 +300,10 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Ratio(1,10),
-                    Constraint::Ratio(5,10),
-                    Constraint::Ratio(3,10),
-                    Constraint::Ratio(1,10),
+                    Constraint::Ratio(1, 10),
+                    Constraint::Ratio(5, 10),
+                    Constraint::Ratio(3, 10),
+                    Constraint::Ratio(1, 10),
                 ]
                 .as_ref(),
             )
@@ -328,6 +365,11 @@ impl App {
         self.input = Input::default()
     }
 
+    pub fn default_close(&mut self) {
+        self.default_input();
+        self.close_popup();
+    }
+
     // SQL RULES
     fn write_todo(&mut self, conn: &Connection) {
         let project_id = match self.projects.current() {
@@ -352,27 +394,28 @@ impl App {
     }
 
     fn update_project_desc(&mut self, conn: &Connection) {
-        let pid = match self.projects.current() {
-            Some(p) => p.id,
-            None => 0,
+        match self.projects.current_state() {
+            (i, Some(p)) => {
+                crate::sql::project::update_project_desc(conn, p.id, self.input.value().to_owned());
+                self.reload();
+                self.projects.select_state(i);
+            },
+            _ => {},
         };
-        crate::sql::project::update_project_desc(conn, pid, self.input.value().to_owned());
+        
 
-        self.projects = TableItems::<Project>::load(conn);
     }
 
     pub fn write_close_new_todo(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         self.write_todo(&conn);
-        self.default_input();
-        self.close_popup();
+        self.default_close();
     }
 
     pub fn write_close_description(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         self.update_project_desc(&conn);
-        self.default_input();
-        self.close_popup();
+        self.default_close();
     }
 
     pub fn write_close_gitconfig(&mut self) {
@@ -385,15 +428,15 @@ impl App {
 
     pub fn write_close_new_category(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        match self.projects.current() {
-            Some(p) => {
-                let category = self.categories.current().unwrap().to_string();
+        match self.projects.current_state() {
+            (i, Some(p)) => {
+                let category = self.categories.current().unwrap().name.to_string();
                 crate::sql::category::write_category(&conn, &self.input.value().to_owned());
                 // TODO needs to work if above write is successful
                 crate::sql::project::update_project_category(&conn, p, &category);
                 self.categories = PlainListItems::<Category>::load(&conn);
                 self.projects = TableItems::<Project>::load(&conn);
-                self.default_select();
+                self.projects.select_state(i);
             }
             _ => {}
         }
@@ -403,13 +446,13 @@ impl App {
 
     pub fn write_close_edit_category(&mut self) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        match self.projects.current() {
-            Some(p) => {
+        match self.projects.current_state() {
+            (i, Some(p)) => {
                 let category = self.categories.current().unwrap().name.to_string();
                 crate::sql::project::update_project_category(&conn, p, &category);
                 self.categories = PlainListItems::<Category>::load(&conn);
                 self.projects = TableItems::<Project>::load(&conn);
-                self.default_select();
+                self.projects.select_state(i);
             }
             _ => {}
         }

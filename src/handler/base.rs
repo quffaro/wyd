@@ -28,7 +28,6 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
         KeyCode::Char('y') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
         KeyCode::Char('p') => {},
-        KeyCode::Char('f') => {}, // status
         KeyCode::Char('G') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
         KeyCode::Char('g') => {},
         KeyCode::Char('h') => app.popup(Popup::Help, None),

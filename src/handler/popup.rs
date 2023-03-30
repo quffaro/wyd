@@ -1,12 +1,10 @@
 use crate::app::{
     structs::{
-        config::{init_config, load_config, Config},
-        todos::Todo,
-        windows::{Mode, Popup, Window},
+        windows::{Mode, Popup},
     },
     App,
 };
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use tui_input::backend::crossterm::EventHandler;
 
 pub fn handle_popup_todo(key_event: KeyEvent, app: &mut App) {
@@ -24,11 +22,7 @@ pub fn handle_popup_todo(key_event: KeyEvent, app: &mut App) {
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             KeyEvent {
                 code: KeyCode::Char('w'),
                 ..
@@ -57,11 +51,7 @@ pub fn handle_popup_desc(key_event: KeyEvent, app: &mut App) {
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             KeyEvent {
                 code: KeyCode::Char('w'),
                 ..
@@ -90,11 +80,7 @@ pub fn handle_popup_search_configs(key_event: KeyEvent, app: &mut App) {
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             KeyEvent {
                 code: KeyCode::Enter,
                 ..
@@ -121,12 +107,6 @@ pub fn handle_popup_search_configs(key_event: KeyEvent, app: &mut App) {
 
 pub fn handle_popup_help(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
-        // Mode::Insert => {
-        //     match key_event {
-        //         KeyEvent{ code: KeyCode::Esc, .. } => app.window.to_normal(),
-        //         event => {app.input.handle_event(&Event::Key(event));}
-        //     }
-        // }
         /* COMMON */
         Mode::Normal | Mode::Insert => match key_event {
             KeyEvent {
@@ -136,11 +116,7 @@ pub fn handle_popup_help(key_event: KeyEvent, app: &mut App) {
             | KeyEvent {
                 code: KeyCode::Char('h'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             _ => {}
         },
     }
@@ -171,16 +147,12 @@ pub fn handle_popup_wyd_config(key_event: KeyEvent, app: &mut App) {
                     search_folder: crate::home_path(crate::PATH_CONFIG),
                     db: crate::home_path(crate::PATH_DB),
                 });
-                app.default_input();
-                app.close_popup();
+                app.default_close();
             }
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             _ => {}
         },
     }
@@ -188,23 +160,12 @@ pub fn handle_popup_wyd_config(key_event: KeyEvent, app: &mut App) {
 
 pub fn handle_popup_edit_cat(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
-        // Mode::Insert => {
-        //     match key_event {
-        //         KeyEvent{ code: KeyCode::Esc, .. } => app.window.to_normal(),
-        //         event => {app.input.handle_event(&Event::Key(event));}
-        //     }
-        // }
         /* COMMON */
         Mode::Normal | Mode::Insert => match key_event {
-            // KeyEvent{ code: KeyCode::Esc, .. } => app.window.to_normal(),
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             KeyEvent {
                 code: KeyCode::Tab, ..
             } => app.window.popup = Popup::NewCat,
@@ -250,11 +211,7 @@ pub fn handle_popup_new_cat(key_event: KeyEvent, app: &mut App) {
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..
-            } => {
-                /* TODO close */
-                app.default_input();
-                app.close_popup();
-            }
+            } => app.default_close(),
             KeyEvent {
                 code: KeyCode::Enter,
                 ..

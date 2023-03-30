@@ -1,5 +1,4 @@
 // use std::thread::__FastLocalKeyInner;
-
 use crate::app::structs::windows::{Popup, Window};
 use crate::app::{App, AppResult};
 use crossterm::event::{MouseEvent, KeyEvent, MouseEventKind};

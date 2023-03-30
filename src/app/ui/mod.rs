@@ -1,3 +1,4 @@
+use super::LoadingState;
 use crate::app::structs::{
     windows::{BaseWindow, Mode, WindowStatus},
     ListNav,
@@ -12,7 +13,6 @@ use ratatui::widgets::{
     Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
 };
 use std::env;
-use super::LoadingState;
 
 pub fn main_ui<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {}
 
@@ -341,11 +341,15 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                 .borders(Borders::ALL)
                 .style(
                     Style::default()
-                        .fg(if app.window.base == BaseWindow::Project && app.window.popup == Popup::None {
-                            Color::Yellow
-                        } else {
-                            Color::White
-                        })
+                        .fg(
+                            if app.window.base == BaseWindow::Project
+                                && app.window.popup == Popup::None
+                            {
+                                Color::Yellow
+                            } else {
+                                Color::White
+                            },
+                        )
                         .bg(Color::Reset),
                 )
                 .border_type(BorderType::Plain),
@@ -359,7 +363,11 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.window.popup == Popup::None { Color::Yellow } else { Color::White })
+                .bg(if app.window.popup == Popup::None {
+                    Color::Yellow
+                } else {
+                    Color::White
+                })
                 .fg(Color::Reset)
                 .add_modifier(Modifier::BOLD),
         )
@@ -445,7 +453,14 @@ pub fn render_loading<'a>(app: &App) -> Paragraph {
                 .title_alignment(Alignment::Left)
                 .borders(Borders::ALL), // .border_type(BorderType::Rounded),
         )
-        .style(Style::default().fg(match state {LoadingState::Loading => Color::Yellow, LoadingState::Finished => Color::Green }).bg(Color::Reset))
+        .style(
+            Style::default()
+                .fg(match state {
+                    LoadingState::Loading => Color::Yellow,
+                    LoadingState::Finished => Color::Green,
+                })
+                .bg(Color::Reset),
+        )
         .alignment(Alignment::Left);
 
     loading

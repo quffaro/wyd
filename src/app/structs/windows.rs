@@ -18,12 +18,12 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn load() -> Window {
+    pub fn load(config: bool) -> Window {
         Window {
             base: BaseWindow::Project,
-            popup: match load_config() {
-                Some(_) => Popup::None,
-                None => Popup::Config,
+            popup: match config {
+                true => Popup::None,
+                false => Popup::Config,
             },
             status: WindowStatus::NotLoaded,
             mode: Mode::Insert,
