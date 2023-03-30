@@ -2,10 +2,18 @@
 
 use crate::app::structs::windows::{Popup, Window};
 use crate::app::{App, AppResult};
-use crossterm::event::KeyEvent;
+use crossterm::event::{MouseEvent, KeyEvent, MouseEventKind};
 
 pub mod base;
 pub mod popup;
+
+pub fn handle_mouse_events(mouse_event: MouseEvent, app: &mut App) -> AppResult<()> {
+    match mouse_event.kind {
+        MouseEventKind::ScrollDown => Ok(app.next()),
+        MouseEventKind::ScrollUp => Ok(app.previous()),
+        _ => Ok(()),
+    }
+}
 
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -30,7 +38,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         } => popup::handle_popup_edit_cat(key_event, app),
         Window {
             popup: Popup::NewCat, .. 
-        } => popup::handle_popup_edit_cat(key_event, app),
+        } => popup::handle_popup_new_cat(key_event, app),
         Window {
             popup: Popup::Config, ..
         } => popup::handle_popup_wyd_config(key_event, app),

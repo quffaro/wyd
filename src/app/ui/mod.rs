@@ -11,7 +11,7 @@ use ratatui::terminal::Frame;
 use ratatui::widgets::{
     Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
 };
-
+use std::env;
 use super::LoadingState;
 
 pub fn main_ui<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {}
@@ -299,11 +299,12 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
     }
 }
 
-pub fn render_title<'a>(app: &App) -> Paragraph {
-    Paragraph::new("This is a tui-rs template.")
+pub fn render_title<'a>(_app: &App) -> Paragraph {
+    let path = env::current_dir().unwrap().display().to_string();
+    Paragraph::new(path)
         .block(
             Block::default()
-                .title(format!("(wyd): {}", app.msg))
+                .title("(wyd?)")
                 .title_alignment(Alignment::Left)
                 .borders(Borders::ALL), // .border_type(BorderType::Rounded),
         )
@@ -340,7 +341,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                 .borders(Borders::ALL)
                 .style(
                     Style::default()
-                        .fg(if app.window.base == BaseWindow::Project {
+                        .fg(if app.window.base == BaseWindow::Project && app.window.popup == Popup::None {
                             Color::Yellow
                         } else {
                             Color::White
@@ -358,7 +359,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(Color::Yellow)
+                .bg(if app.window.popup == Popup::None { Color::Yellow } else { Color::White })
                 .fg(Color::Reset)
                 .add_modifier(Modifier::BOLD),
         )

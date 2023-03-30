@@ -105,6 +105,17 @@ impl App {
             desc: "".to_owned(),
         }
     }
+
+    pub fn reload(&mut self) {
+        // TODO should retain selection...
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        self.projects = TableItems::<Project>::load(&conn);
+    }
+
+    pub fn finish_github_request(&mut self) {
+        self.jobs.gitcommit = crate::app::LoadingState::Finished; self.reload();
+    }
+
     /// Handles the tick event of the terminal.
     pub fn tick(&self) {}
 
@@ -252,10 +263,10 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(30),
-                    Constraint::Length(1),
+                    Constraint::Ratio(1,10),
+                    Constraint::Ratio(5,10),
+                    Constraint::Ratio(3,10),
+                    Constraint::Ratio(1,10),
                 ]
                 .as_ref(),
             )

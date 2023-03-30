@@ -22,8 +22,8 @@ impl Window {
         Window {
             base: BaseWindow::Project,
             popup: match load_config() {
-                Some(_) => Popup::Config,
-                None => Popup::None,
+                Some(_) => Popup::None,
+                None => Popup::Config,
             },
             status: WindowStatus::NotLoaded,
             mode: Mode::Insert,

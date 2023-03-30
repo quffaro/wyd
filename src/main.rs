@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use std::{thread, io};
 use wyd::app::{App, AppResult};
 use wyd::event::{Event, EventHandler};
-use wyd::handler::handle_key_events;
+use wyd::handler::{handle_key_events, handle_mouse_events};
 use wyd::tui::Tui;
 use wyd::{home_path, PATH_DB};
 
@@ -36,9 +36,9 @@ fn main() -> AppResult<()> {
         match tui.events.next()? {
             Event::Tick => app.tick(),
             Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
-            Event::Mouse(_) => {}
+            Event::Mouse(mouse_event) => handle_mouse_events(mouse_event, &mut app)?,
             Event::Resize(_, _) => {},
-            Event::RequestComplete => app.jobs.gitcommit = wyd::app::LoadingState::Finished,
+            Event::RequestComplete => app.finish_github_request(),
         }
     }
 
