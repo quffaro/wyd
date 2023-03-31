@@ -1,4 +1,4 @@
-use super::{FilteredListItems, ListState};
+use super::{FilteredListItems, ListNav, ListState, TableState};
 use crate::sql::todo::read_todo;
 use rusqlite::Connection;
 
@@ -18,7 +18,19 @@ impl FilteredListItems<Todo> {
         FilteredListItems {
             items: read_todo(conn).expect("AA"),
             filtered: vec![],
-            state: ListState::default(),
+            state: TableState::default(),
+        }
+    }
+    pub fn current(&self) -> Option<&Todo> {
+        match self.get_state_selected() {
+            Some(idx) => self.filtered.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn current_state(&self) -> (Option<usize>, Option<&Todo>) {
+        match self.get_state_selected() {
+            Some(idx) => (Some(idx), self.filtered.iter().nth(idx)),
+            None => (None, None),
         }
     }
     // TODO this is an imperfect one...

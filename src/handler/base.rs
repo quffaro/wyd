@@ -1,5 +1,5 @@
 use crate::app::{
-    structs::windows::{Mode, Popup},
+    structs::windows::{BaseWindow, Mode, Popup},
     App,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -17,17 +17,17 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
             }
         }
         KeyCode::Enter | KeyCode::Char('x') => app.toggle(),
-        KeyCode::Right => app.cycle_focus_next(),
-        KeyCode::Left => app.cycle_focus_previous(),
-        KeyCode::Up => app.previous(),
-        KeyCode::Down => app.next(),
+        KeyCode::Char('d') | KeyCode::Right => app.cycle_focus_next(),
+        KeyCode::Char('a') | KeyCode::Left => app.cycle_focus_previous(),
+        KeyCode::Char('w') | KeyCode::Up => app.previous(),
+        KeyCode::Char('s') | KeyCode::Down => app.next(),
         // Other handlers you could add here.
         KeyCode::Char('A') => app.add_project_in_dir(true),
         KeyCode::Char('r') => app.popup(Popup::EditCat, Some(Mode::Insert)),
         KeyCode::Char('R') => app.popup(Popup::NewCat, None),
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
         KeyCode::Char('y') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
-        KeyCode::Char('p') => {}
+        KeyCode::Char('p') => app.cycle_priority(),
         KeyCode::Char('G') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
         KeyCode::Char('g') => {}
         KeyCode::Char('h') => app.popup(Popup::Help, None),

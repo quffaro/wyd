@@ -9,7 +9,8 @@ use self::structs::{
     FilteredListItems, ListNav, PlainListItems, TableItems,
 };
 use crate::app::ui::{
-    render_loading, render_popup_todo, render_projects, render_title, render_todo_and_desc,
+    render_loading, render_popup_todo, render_projects, render_title, render_todo,
+    render_todo_and_desc,
 };
 use crate::sql::project::{update_project_desc, write_project};
 use crate::{home_path, PATH_DB};
@@ -32,6 +33,7 @@ pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 pub struct App {
     /// Is the application running?
     pub running: bool,
+    pub tick: u8,
     pub msg: String,
     pub input: Input,
     pub is_popup_loading: bool,
@@ -50,6 +52,7 @@ impl Default for App {
         match load_config() {
             Some(c) => App {
                 running: true,
+                tick: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -64,6 +67,7 @@ impl Default for App {
             },
             None => App {
                 running: true,
+                tick: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -92,6 +96,7 @@ impl App {
         match load_config() {
             Some(c) => Self {
                 running: true,
+                tick: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -106,6 +111,7 @@ impl App {
             },
             None => Self {
                 running: true,
+                tick: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -124,7 +130,14 @@ impl App {
     pub fn reload(&mut self) {
         // TODO should retain selection...
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        self.projects = TableItems::<Project>::load(&conn);
+
+        match self.projects.get_state_selected() {
+            Some(idx) => {
+                self.projects = TableItems::<Project>::load(&conn);
+                self.projects.select_state(Some(idx));
+            }
+            _ => (),
+        }
     }
 
     pub fn finish_github_request(&mut self) {
@@ -133,7 +146,13 @@ impl App {
     }
 
     /// Handles the tick event of the terminal.
-    pub fn tick(&self) {}
+    pub fn tick(&mut self) {
+        self.tick = (self.tick + 1) % 5;
+        // self.tick = match self.tick.checked_add(1).map(|i| i % 5) {
+        //     Some(y) => y,
+        //     None => 0,
+        // }
+    }
 
     pub fn next(&mut self) {
         match self.window {
@@ -303,7 +322,8 @@ impl App {
             .split(chunks[2]);
 
         let (todo_block, desc_block) = render_todo_and_desc(self);
-        frame.render_stateful_widget(todo_block, project_info_chunk[0], &mut self.todos.state);
+        let todo_table = render_todo(self);
+        frame.render_stateful_widget(todo_table, project_info_chunk[0], &mut self.todos.state);
         frame.render_widget(desc_block, project_info_chunk[1]);
 
         // CHUNK 3
@@ -432,5 +452,19 @@ impl App {
             _ => {}
         }
         self.default_close();
+    }
+
+    pub fn cycle_priority(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        match self.todos.current_state() {
+            (idx, Some(t)) => {
+                let priority = (t.priority + 1) % 3;
+                crate::sql::todo::update_todo_priority(&conn, t.id, priority);
+                // TODO
+                // self.todos = FilteredListItems::<Todo>::load(&conn);
+                self.todos.select_state(idx);
+            }
+            _ => (),
+        }
     }
 }

@@ -79,3 +79,14 @@ pub fn update_todo(conn: &Connection, todo: &Todo) -> Result<(), rusqlite::Error
 
     Ok(())
 }
+const UPDATE_TODO_PRIORITY: &str = "update todo set priority = ?1 where id = ?2;";
+pub fn update_todo_priority(
+    conn: &Connection,
+    id: u8,
+    priority: u8,
+) -> Result<(), rusqlite::Error> {
+    let mut write_stmt = conn.prepare(UPDATE_TODO_PRIORITY)?;
+    write_stmt.execute(params![priority, id]).expect("AAAA");
+
+    Ok(())
+}

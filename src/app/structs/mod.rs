@@ -67,7 +67,7 @@ impl<T> ListNav for PlainListItems<T> {
 pub struct FilteredListItems<T> {
     pub items: Vec<T>,
     pub filtered: Vec<T>,
-    pub state: ListState,
+    pub state: TableState,
 }
 
 impl<T> ListNav for FilteredListItems<T> {
@@ -75,7 +75,7 @@ impl<T> ListNav for FilteredListItems<T> {
         FilteredListItems {
             items: vec![],
             filtered: vec![],
-            state: ListState::default(),
+            state: TableState::default(),
         }
     }
     fn get_items_len<'a>(&'a self) -> usize {

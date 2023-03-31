@@ -377,6 +377,60 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
     projects
 }
 
+pub fn render_todo<'a>(app: &App) -> Table<'a> {
+    let rows: Vec<Row> = app
+        .todos
+        .filtered
+        .iter()
+        .map(|t| {
+            Row::new(vec![
+                Cell::from(match t.is_complete {
+                    true => format!("[x] {}", t.todo.clone()),
+                    false => format!("[ ] {}", t.todo.clone()),
+                }),
+                Cell::from(t.priority.to_string()),
+            ])
+        })
+        .collect();
+
+    let todos = Table::new(rows)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .title("(projects)")
+                .borders(Borders::ALL)
+                .style(
+                    Style::default()
+                        .fg(
+                            if app.window.base == BaseWindow::Todo
+                                && app.window.popup == Popup::None
+                            {
+                                Color::Yellow
+                            } else {
+                                Color::White
+                            },
+                        )
+                        .bg(Color::Black),
+                )
+                .border_type(BorderType::Plain),
+        )
+        .header(Row::new(vec!["Name", ""]))
+        .widths(&[Constraint::Percentage(90), Constraint::Percentage(10)])
+        .highlight_style(
+            Style::default()
+                .bg(if app.window.popup == Popup::None {
+                    Color::Yellow
+                } else {
+                    Color::White
+                })
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+
+    todos
+}
+
 pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     let todo_block = Block::default()
         .borders(Borders::ALL)
@@ -469,7 +523,7 @@ pub fn render_loading<'a>(app: &App) -> Paragraph {
 
 fn display_loading_gitcommit<'a>(app: &App) -> (&str, LoadingState) {
     match app.jobs.gitcommit {
-        super::LoadingState::Loading => match rand::random::<u8>() % 5 {
+        super::LoadingState::Loading => match app.tick {
             0 => ("⠾ loading commits...", LoadingState::Loading),
             1 => ("⠽ loading commits...", LoadingState::Loading),
             2 => ("⠻ loading commits...", LoadingState::Loading),
