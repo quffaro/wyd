@@ -462,7 +462,9 @@ impl App {
                 crate::sql::todo::update_todo_priority(&conn, t.id, priority);
                 // TODO
                 // self.todos = FilteredListItems::<Todo>::load(&conn);
-                self.todos.select_state(idx);
+                // self.todos.filter_from_projects(t.project_id.clone());
+                // self.todos.select_state(idx);
+                // self.todos.select_state(idx);
             }
             _ => (),
         }
