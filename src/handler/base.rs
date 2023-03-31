@@ -1,8 +1,8 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::app::{
     structs::windows::{Mode, Popup},
     App,
 };
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn handle_base(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
@@ -16,7 +16,7 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 app.running = false;
             }
         }
-        KeyCode::Enter => app.toggle(),
+        KeyCode::Enter | KeyCode::Char('x') => app.toggle(),
         KeyCode::Right => app.cycle_focus_next(),
         KeyCode::Left => app.cycle_focus_previous(),
         KeyCode::Up => app.previous(),
@@ -27,9 +27,9 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
         KeyCode::Char('R') => app.popup(Popup::NewCat, None),
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
         KeyCode::Char('y') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
-        KeyCode::Char('p') => {},
+        KeyCode::Char('p') => {}
         KeyCode::Char('G') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
-        KeyCode::Char('g') => {},
+        KeyCode::Char('g') => {}
         KeyCode::Char('h') => app.popup(Popup::Help, None),
         _ => {}
     }

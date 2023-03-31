@@ -279,6 +279,7 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
                     Mode::Insert => Color::Yellow,
                     Mode::Normal => Color::Green,
                 }))
+                .wrap(Wrap { trim: false })
                 .block(
                     Block::default()
                         .title("(add todo)")
@@ -308,7 +309,7 @@ pub fn render_title<'a>(_app: &App) -> Paragraph {
                 .title_alignment(Alignment::Left)
                 .borders(Borders::ALL), // .border_type(BorderType::Rounded),
         )
-        .style(Style::default().fg(Color::Yellow).bg(Color::Reset))
+        .style(Style::default().fg(Color::Yellow).bg(Color::Black))
         .alignment(Alignment::Left)
 }
 
@@ -350,7 +351,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                                 Color::White
                             },
                         )
-                        .bg(Color::Reset),
+                        .bg(Color::Black),
                 )
                 .border_type(BorderType::Plain),
         )
@@ -368,7 +369,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                 } else {
                     Color::White
                 })
-                .fg(Color::Reset)
+                .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
@@ -386,7 +387,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
                 } else {
                     Color::White
                 })
-                .bg(Color::Reset),
+                .bg(Color::Black),
         )
         .title("(todo)")
         .border_type(BorderType::Plain);
@@ -411,7 +412,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
             } else {
                 Color::White
             })
-            .bg(Color::Reset)
+            .bg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
@@ -436,7 +437,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
                 } else {
                     Color::White
                 })
-                .bg(Color::Reset),
+                .bg(Color::Black),
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false });
@@ -459,7 +460,7 @@ pub fn render_loading<'a>(app: &App) -> Paragraph {
                     LoadingState::Loading => Color::Yellow,
                     LoadingState::Finished => Color::Green,
                 })
-                .bg(Color::Reset),
+                .bg(Color::Black),
         )
         .alignment(Alignment::Left);
 

@@ -1,9 +1,10 @@
 use self::structs::{
     category::Category,
+    config::{load_config, Config},
     gitconfig::GitConfig,
+    jobs::{JobRoster, LoadingState},
     projects::Project,
     todos::Todo,
-    config::{Config, load_config},
     windows::{BaseWindow, Mode, Popup, Window},
     FilteredListItems, ListNav, PlainListItems, TableItems,
 };
@@ -25,27 +26,6 @@ pub mod ui;
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
-
-#[derive(Debug, Clone, Copy)]
-pub struct JobRoster {
-    pub gitcommit: LoadingState,
-    pub gitconfig: LoadingState,
-}
-
-impl JobRoster {
-    pub fn new() -> Self {
-        Self {
-            gitcommit: LoadingState::Loading,
-            gitconfig: LoadingState::Loading,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum LoadingState {
-    Loading,
-    Finished,
-}
 
 /// Application.
 #[derive(Debug)]
@@ -137,9 +117,8 @@ impl App {
                 configs: TableItems::<GitConfig>::load(&conn),
                 categories: PlainListItems::<Category>::load(&conn),
                 // desc: "".to_owned(),
-            }
+            },
         }
-        
     }
 
     pub fn reload(&mut self) {
@@ -300,10 +279,10 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Ratio(1, 10),
-                    Constraint::Ratio(5, 10),
-                    Constraint::Ratio(3, 10),
-                    Constraint::Ratio(1, 10),
+                    Constraint::Ratio(1, 20),
+                    Constraint::Ratio(11, 20),
+                    Constraint::Ratio(6, 20),
+                    Constraint::Ratio(1, 20),
                 ]
                 .as_ref(),
             )
@@ -399,11 +378,9 @@ impl App {
                 crate::sql::project::update_project_desc(conn, p.id, self.input.value().to_owned());
                 self.reload();
                 self.projects.select_state(i);
-            },
-            _ => {},
+            }
+            _ => {}
         };
-        
-
     }
 
     pub fn write_close_new_todo(&mut self) {
@@ -422,8 +399,7 @@ impl App {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         crate::sql::tmp_config::write_tmp_to_project(&conn);
         self.projects = TableItems::<Project>::load(&conn);
-        self.default_input();
-        self.close_popup();
+        self.default_close();
     }
 
     pub fn write_close_new_category(&mut self) {
@@ -440,8 +416,7 @@ impl App {
             }
             _ => {}
         }
-        self.default_input();
-        self.close_popup();
+        self.default_close();
     }
 
     pub fn write_close_edit_category(&mut self) {
@@ -456,7 +431,6 @@ impl App {
             }
             _ => {}
         }
-        self.default_input();
-        self.close_popup();
+        self.default_close();
     }
 }
