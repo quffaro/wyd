@@ -1,7 +1,7 @@
 // use std::thread::__FastLocalKeyInner;
 use crate::app::structs::windows::{Popup, Window};
 use crate::app::{App, AppResult};
-use crossterm::event::{MouseEvent, KeyEvent, MouseEventKind};
+use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 
 pub mod base;
 pub mod popup;
@@ -33,14 +33,21 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             popup: Popup::Help, ..
         } => popup::handle_popup_help(key_event, app),
         Window {
-            popup: Popup::EditCat, .. 
+            popup: Popup::EditCat,
+            ..
         } => popup::handle_popup_edit_cat(key_event, app),
         Window {
-            popup: Popup::NewCat, .. 
+            popup: Popup::NewCat,
+            ..
         } => popup::handle_popup_new_cat(key_event, app),
         Window {
-            popup: Popup::Config, ..
+            popup: Popup::Config,
+            ..
         } => popup::handle_popup_wyd_config(key_event, app),
+        Window {
+            popup: Popup::DeleteProject,
+            ..
+        } => popup::handle_popup_delete_project(key_event, app),
         _ => base::handle_base(key_event, app),
     }
 

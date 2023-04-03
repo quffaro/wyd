@@ -9,8 +9,9 @@ use self::structs::{
     FilteredListItems, ListNav, PlainListItems, TableItems,
 };
 use crate::app::ui::{
-    render_loading, render_popup_todo, render_projects, render_title, render_todo,
-    render_todo_and_desc,
+    base::{render_projects, render_title, render_todo, render_todo_and_desc},
+    popup::render_popup_todo,
+    render_loading,
 };
 use crate::sql::project::{update_project_desc, write_project};
 use crate::{home_path, PATH_DB};
@@ -44,7 +45,6 @@ pub struct App {
     pub todos: FilteredListItems<Todo>,
     pub configs: TableItems<GitConfig>,
     pub categories: PlainListItems<Category>,
-    // pub desc: String,
 }
 
 impl Default for App {
@@ -107,7 +107,6 @@ impl App {
                 todos: FilteredListItems::<Todo>::load(&conn),
                 configs: TableItems::<GitConfig>::load(&conn),
                 categories: PlainListItems::<Category>::load(&conn),
-                // desc: "".to_owned(),
             },
             None => Self {
                 running: true,
@@ -122,7 +121,6 @@ impl App {
                 todos: FilteredListItems::<Todo>::load(&conn),
                 configs: TableItems::<GitConfig>::load(&conn),
                 categories: PlainListItems::<Category>::load(&conn),
-                // desc: "".to_owned(),
             },
         }
     }
@@ -332,13 +330,16 @@ impl App {
 
         // POPUP
         match self.window.popup {
-            Popup::AddTodo => crate::app::ui::render_popup_todo(self, frame),
-            Popup::EditDesc => crate::app::ui::render_popup_edit_desc(self, frame),
-            Popup::SearchGitConfigs => crate::app::ui::render_popup_search_config(self, frame),
-            Popup::Help => crate::app::ui::render_popup_help_table(self, frame),
-            Popup::NewCat => crate::app::ui::render_popup_new_cat(self, frame),
-            Popup::EditCat => crate::app::ui::render_popup_new_cat(self, frame),
-            Popup::Config => crate::app::ui::render_popup_wyd_confg(self, frame),
+            Popup::AddTodo => crate::app::ui::popup::render_popup_todo(self, frame),
+            Popup::EditDesc => crate::app::ui::popup::render_popup_edit_desc(self, frame),
+            Popup::SearchGitConfigs => {
+                crate::app::ui::popup::render_popup_search_config(self, frame)
+            }
+            Popup::Help => crate::app::ui::popup::render_popup_help_table(self, frame),
+            Popup::NewCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
+            Popup::EditCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
+            Popup::Config => crate::app::ui::popup::render_popup_wyd_confg(self, frame),
+            Popup::DeleteProject => crate::app::ui::popup::render_popup_delete_project(self, frame),
             _ => {}
         }
     }
@@ -468,5 +469,12 @@ impl App {
             }
             _ => (),
         }
+    }
+
+    pub fn get_bg_color(&self) -> ratatui::style::Color {
+        self.config
+            .clone()
+            .and_then(|c| Some(crate::app::structs::config::wyd_to_color(c.color.bd)))
+            .unwrap()
     }
 }

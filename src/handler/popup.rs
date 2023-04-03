@@ -1,11 +1,30 @@
 use crate::app::{
-    structs::{
-        windows::{Mode, Popup},
-    },
+    structs::windows::{Mode, Popup},
     App,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use tui_input::backend::crossterm::EventHandler;
+
+pub fn handle_popup_delete_project(key_event: KeyEvent, app: &mut App) {
+    match app.window.mode {
+        Mode::Insert => match key_event {
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } => app.window.to_normal(),
+            event => {
+                app.input.handle_event(&Event::Key(event));
+            }
+        },
+        /* COMMON */
+        Mode::Normal => match key_event {
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                ..
+            } => app.default_close(),
+            _ => {}
+        },
+    }
+}
 
 pub fn handle_popup_todo(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
@@ -146,6 +165,7 @@ pub fn handle_popup_wyd_config(key_event: KeyEvent, app: &mut App) {
                     owner: app.input.value().to_owned(),
                     search_folder: crate::home_path(crate::PATH_CONFIG),
                     db: crate::home_path(crate::PATH_DB),
+                    color: crate::app::structs::config::ColorConfig::default(),
                 });
                 app.default_close();
             }

@@ -113,6 +113,7 @@ pub enum Popup {
     EditDesc,
     Help,
     Config,
+    DeleteProject,
 }
 
 impl fmt::Display for Popup {
@@ -126,6 +127,7 @@ impl fmt::Display for Popup {
             Self::EditDesc => write!(f, "EDIT DESCRIPTION"),
             Self::Help => write!(f, "HELP"),
             Self::Config => write!(f, "CONFIG"),
+            Self::DeleteProject => write!(f, "DELETE PROJECT"),
         }
     }
 }

@@ -45,6 +45,7 @@ pub fn read_git_config(path: String) -> String {
     let config_path = format!("{}{}", path, GITCONFIG_SUFFIX).to_owned();
     // dbg!(&config_path);
     let config = Ini::load_from_file(config_path).expect(path.as_str());
+    // TODO breaks if no gitconfig
     let url = config
         .get_from(Some("remote \"origin\""), "url")
         .unwrap()

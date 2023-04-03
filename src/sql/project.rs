@@ -98,8 +98,7 @@ pub fn update_project_desc(
     pid: u8,
     desc: String,
 ) -> Result<(), rusqlite::Error> {
-    conn.execute(UPDATE_PROJECT_DESC, (desc, pid))
-        .expect("A");
+    conn.execute(UPDATE_PROJECT_DESC, (desc, pid)).expect("A");
 
     Ok(())
 }
@@ -138,43 +137,51 @@ pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(),
     Ok(())
 }
 
+const DELETE_PROJECT: &str =
+    "delete from project where project_id = ?1; delete from todo where project_id = ?1";
+pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
+    conn.execute(DELETE_PROJECT, [project.id]).expect("AAA");
+
+    Ok(())
+}
+
 pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
     let path = env::current_dir().unwrap().display().to_string();
-        if is_find_git {
-            let repo = match git2::Repository::discover(path) {
-                Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
-                _ => "N/A".to_string(),
-            };
-            write_project(
-                conn,
-                Project {
-                    id: 0,
-                    path: repo.clone(),
-                    name: crate::app::regex::regex_last_dir(repo.clone()),
-                    desc: "N/A".to_owned(),
-                    category: "Unknown".to_owned(),
-                    status: crate::app::structs::projects::ProjectStatus::Unstable,
-                    is_git: true,
-                    owner: crate::app::structs::gitconfig::guess_git_owner(repo.clone()), //TODO
-                    repo: crate::app::regex::regex_last_dir(repo.clone()),
-                    last_commit: "N/A".to_owned(),
-                },
-            );
-        } else {
-            write_project(
-                conn,
-                Project {
-                    id: 0,
-                    path: path.clone(),
-                    name: crate::app::regex::regex_last_dir(path.clone()),
-                    desc: "N/A".to_owned(),
-                    category: "Unknown".to_owned(),
-                    status: crate::app::structs::projects::ProjectStatus::Unstable,
-                    is_git: false,
-                    owner: "quffaro".to_owned(), //TODO
-                    repo: "".to_owned(),         //TODO should be null sql
-                    last_commit: "N/A".to_owned(),
-                },
-            );
-        }
+    if is_find_git {
+        let repo = match git2::Repository::discover(path) {
+            Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+            _ => "N/A".to_string(),
+        };
+        write_project(
+            conn,
+            Project {
+                id: 0,
+                path: repo.clone(),
+                name: crate::app::regex::regex_last_dir(repo.clone()),
+                desc: "N/A".to_owned(),
+                category: "Unknown".to_owned(),
+                status: crate::app::structs::projects::ProjectStatus::Unstable,
+                is_git: true,
+                owner: crate::app::structs::gitconfig::guess_git_owner(repo.clone()), //TODO
+                repo: crate::app::regex::regex_last_dir(repo.clone()),
+                last_commit: "N/A".to_owned(),
+            },
+        );
+    } else {
+        write_project(
+            conn,
+            Project {
+                id: 0,
+                path: path.clone(),
+                name: crate::app::regex::regex_last_dir(path.clone()),
+                desc: "N/A".to_owned(),
+                category: "Unknown".to_owned(),
+                status: crate::app::structs::projects::ProjectStatus::Unstable,
+                is_git: false,
+                owner: "quffaro".to_owned(), //TODO
+                repo: "".to_owned(),         //TODO should be null sql
+                last_commit: "N/A".to_owned(),
+            },
+        );
+    }
 }
