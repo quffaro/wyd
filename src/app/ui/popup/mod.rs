@@ -10,8 +10,9 @@ use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::terminal::Frame;
+use ratatui::text::{Span, Spans};
 use ratatui::widgets::{
-    Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap,
+    Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap,
 };
 use std::env;
 
@@ -47,23 +48,42 @@ pub fn render_popup_delete_project<'a, B: Backend>(app: &mut App, frame: &mut Fr
 
     // OWNER
     let text = Paragraph::new(format!(
-        "Are you sure you want to delete {}",
+        "Are you sure you want to delete {}?",
         app.projects.current().unwrap().name
     ))
-    .style(Style::default().fg(match app.window.mode {
-        Mode::Insert => Color::Yellow,
-        Mode::Normal => Color::Green,
-    }))
     .wrap(Wrap { trim: false })
     .block(
         Block::default()
             .title("(are you sure?)")
             .title_alignment(Alignment::Left)
-            .borders(Borders::ALL),
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::LightRed)),
     );
 
+    let choices = vec!["Yes", "No"]
+        .iter()
+        .map(|t| {
+            let (first, rest) = t.split_at(1);
+            Spans::from(vec![
+                Span::styled(first, Style::default().fg(Color::Yellow)),
+                Span::styled(rest, Style::default().fg(Color::Green)),
+            ])
+        })
+        .collect();
+    let tabs = Tabs::new(choices)
+        .block(Block::default().borders(Borders::ALL).title(format!(
+            "(are you sure you want to delete {}?",
+            app.projects.current().unwrap().name
+        )))
+        .select(app.index)
+        .style(Style::default().fg(Color::Cyan))
+        .highlight_style(
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .bg(Color::Black),
+        );
     // SEARCH DIRECTORY
-    frame.render_widget(text, area);
+    frame.render_widget(tabs, area);
 }
 
 pub fn render_popup_wyd_confg<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {

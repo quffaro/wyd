@@ -1,6 +1,6 @@
 use self::structs::{
     category::Category,
-    config::{load_config, Config},
+    config::{load_config, wyd_to_color, Config},
     gitconfig::GitConfig,
     jobs::{JobRoster, LoadingState},
     projects::Project,
@@ -35,6 +35,7 @@ pub struct App {
     /// Is the application running?
     pub running: bool,
     pub tick: u8,
+    pub index: usize,
     pub msg: String,
     pub input: Input,
     pub is_popup_loading: bool,
@@ -53,6 +54,7 @@ impl Default for App {
             Some(c) => App {
                 running: true,
                 tick: 0,
+                index: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -68,6 +70,7 @@ impl Default for App {
             None => App {
                 running: true,
                 tick: 0,
+                index: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -97,6 +100,7 @@ impl App {
             Some(c) => Self {
                 running: true,
                 tick: 0,
+                index: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -111,6 +115,7 @@ impl App {
             None => Self {
                 running: true,
                 tick: 0,
+                index: 0,
                 msg: "Nothing".to_owned(),
                 input: Input::default(),
                 is_popup_loading: false,
@@ -296,10 +301,10 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Ratio(1, 20),
-                    Constraint::Ratio(11, 20),
-                    Constraint::Ratio(6, 20),
-                    Constraint::Ratio(1, 20),
+                    Constraint::Min(3),
+                    Constraint::Percentage(40),
+                    Constraint::Percentage(40),
+                    Constraint::Max(3),
                 ]
                 .as_ref(),
             )
@@ -347,7 +352,8 @@ impl App {
     /// TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        crate::sql::project::add_project_in_dir(is_find_git, &conn)
+        crate::sql::project::add_project_in_dir(is_find_git, &conn);
+        self.projects = TableItems::<Project>::load(&conn);
     }
 
     // POPUP RULES
@@ -427,10 +433,11 @@ impl App {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
         match self.projects.current_state() {
             (i, Some(p)) => {
-                let category = self.categories.current().unwrap().name.to_string();
-                crate::sql::category::write_category(&conn, &self.input.value().to_owned());
+                let value = self.input.value().to_owned();
+                crate::sql::category::write_category(&conn, &value);
                 // TODO needs to work if above write is successful
-                crate::sql::project::update_project_category(&conn, p, &category);
+                crate::sql::project::update_project_category(&conn, p, &value);
+                // reload
                 self.categories = PlainListItems::<Category>::load(&conn);
                 self.projects = TableItems::<Project>::load(&conn);
                 self.projects.select_state(i);
@@ -471,10 +478,22 @@ impl App {
         }
     }
 
+    pub fn delete_project(&mut self) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        match self.projects.current() {
+            Some(p) => {
+                crate::sql::project::delete_project(&conn, p);
+                self.projects = TableItems::<Project>::load(&conn);
+                self.todos = FilteredListItems::<Todo>::load(&conn);
+                self.default_close();
+            }
+            _ => (),
+        }
+    }
     pub fn get_bg_color(&self) -> ratatui::style::Color {
         self.config
             .clone()
-            .and_then(|c| Some(crate::app::structs::config::wyd_to_color(c.color.bd)))
+            .and_then(|c| Some(wyd_to_color(c.color.bd)))
             .unwrap()
     }
 }

@@ -7,16 +7,17 @@ use tui_input::backend::crossterm::EventHandler;
 
 pub fn handle_popup_delete_project(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
-        Mode::Insert => match key_event {
+        Mode::Insert | Mode::Normal => match key_event {
             KeyEvent {
-                code: KeyCode::Esc, ..
-            } => app.window.to_normal(),
-            event => {
-                app.input.handle_event(&Event::Key(event));
-            }
-        },
-        /* COMMON */
-        Mode::Normal => match key_event {
+                code: KeyCode::Tab, ..
+            } => app.index = (app.index + 1) % 2,
+            KeyEvent {
+                code: KeyCode::Enter,
+                ..
+            } => match app.index {
+                0 => app.delete_project(),
+                _ => {}
+            },
             KeyEvent {
                 code: KeyCode::Char('q'),
                 ..

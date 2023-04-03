@@ -138,7 +138,7 @@ pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(),
 }
 
 const DELETE_PROJECT: &str =
-    "delete from project where project_id = ?1; delete from todo where project_id = ?1";
+    "delete from project where id = ?1; delete from todo where project_id = ?1";
 pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
     conn.execute(DELETE_PROJECT, [project.id]).expect("AAA");
 

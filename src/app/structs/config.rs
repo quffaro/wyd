@@ -1,5 +1,6 @@
 use crate::{home_path, PATH_CONFIG};
 use ini::Ini;
+use ratatui::style::Color;
 use std::string::ToString;
 use std::{fmt, str::FromStr};
 use strum_macros::Display;
@@ -32,6 +33,17 @@ impl FromStr for WydColor {
             "Reset" => Ok(WydColor::Reset),
             _ => Err(()),
         }
+    }
+}
+
+pub fn wyd_to_color(color: WydColor) -> Color {
+    match color {
+        WydColor::Red => Color::Red,
+        WydColor::Yellow => Color::Yellow,
+        WydColor::Blue => Color::Cyan,
+        WydColor::Green => Color::Green,
+        WydColor::Black => Color::Black,
+        WydColor::Reset => Color::Reset,
     }
 }
 
