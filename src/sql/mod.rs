@@ -1,9 +1,9 @@
 use rusqlite::Connection;
 
+pub mod category;
 pub mod project;
 pub mod tmp_config;
 pub mod todo;
-pub mod category;
 
 const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     id          integer primary key autoincrement, 
@@ -18,6 +18,19 @@ const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     last_commit varchar(255),
     UNIQUE(path)
 );";
+const CREATE_PROJECT_PATH: &str = "CREATE TABLE IF NOT EXISTS project_path (
+    id          integer primary autoincrement,
+    project_id  integer,
+    author      varchar(255),
+    path        varchar(4000),
+);";
+const CREATE_VIEW_PROJECT: &str = "CREATE OR REPLACE VIEW v_project
+    AS SELECT
+    `t`.`id`   AS `id`,
+    `s`.`path` AS `path`,
+    `t`.`name` AS `name`,
+    `t`.`cat`  AS `cat`,
+    `t`.`status` AS `status`
 const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     id          integer primary key autoincrement,
     parent_id   integer,
