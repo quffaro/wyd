@@ -26,11 +26,19 @@ const CREATE_PROJECT_PATH: &str = "CREATE TABLE IF NOT EXISTS project_path (
 );";
 const CREATE_VIEW_PROJECT: &str = "CREATE OR REPLACE VIEW v_project
     AS SELECT
-    `t`.`id`   AS `id`,
-    `s`.`path` AS `path`,
-    `t`.`name` AS `name`,
-    `t`.`cat`  AS `cat`,
-    `t`.`status` AS `status`
+    `t`.`id`          AS `id`,
+    `s`.`path`        AS `path`,
+    `t`.`name`        AS `name`,
+    `t`.`cat`         AS `cat`,
+    `t`.`status`      AS `status`,
+    `t`.`is_git`      AS `is_git`,
+    `t`.`owner`       AS `owner`,
+    `t`.`repo`        AS `repo`,
+    `t`.`last_commit` AS `last_commit`
+    FROM project t
+    LEFT JOIN project_path s
+    ON t.id = s.project_id
+);";
 const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     id          integer primary key autoincrement,
     parent_id   integer,
