@@ -19,12 +19,13 @@ const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     UNIQUE(path)
 );";
 const CREATE_PROJECT_PATH: &str = "CREATE TABLE IF NOT EXISTS project_path (
-    id          integer primary autoincrement,
+    id          integer primary key autoincrement,
     project_id  integer,
     author      varchar(255),
-    path        varchar(4000),
+    path        varchar(4000)
 );";
-const CREATE_VIEW_PROJECT: &str = "CREATE OR REPLACE VIEW v_project
+const CREATE_VIEW_PROJECT: &str = "
+    CREATE VIEW v_project
     AS SELECT
     `t`.`id`          AS `id`,
     `s`.`path`        AS `path`,
@@ -37,8 +38,7 @@ const CREATE_VIEW_PROJECT: &str = "CREATE OR REPLACE VIEW v_project
     `t`.`last_commit` AS `last_commit`
     FROM project t
     LEFT JOIN project_path s
-    ON t.id = s.project_id
-);";
+    ON `t`.`id` = `s`.`project_id`;";
 const CREATE_TODO: &str = "CREATE TABLE IF NOT EXISTS todo (
     id          integer primary key autoincrement,
     parent_id   integer,
@@ -59,6 +59,8 @@ const CREATE_CONFIG: &str = "CREATE TABLE IF NOT EXISTS tmp_git_config (
 
 pub fn initialize_db(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute(CREATE_PROJECT, ())?;
+    conn.execute(CREATE_PROJECT_PATH, ())?;
+    conn.execute(CREATE_VIEW_PROJECT, ())?;
     conn.execute(CREATE_TODO, ()).expect("CREATE_TODO_ERROR");
     conn.execute(CREATE_CATEGORIES, ())?;
     conn.execute(CREATE_CONFIG, ())?;
