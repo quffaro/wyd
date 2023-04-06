@@ -1,0 +1,955 @@
+use crate::library::config::{init_config, load_config};
+use crate::library::gitconfig::guess_git_owner;
+use crate::library::sql::{
+    initialize_db,
+    read_category,
+    read_project,
+    read_tmp,
+    read_todo,
+    regex_last_dir,
+    regex_repo, // TODO move regex repo to another folder
+    update_project_category,
+    update_project_desc,
+    update_project_status,
+    update_tmp,
+    update_todo,
+    write_category,
+    write_new_todo,
+    write_project,
+    write_tmp_to_project,
+};
+use dirs::home_dir;
+use glob::glob;
+use rusqlite::{
+    types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
+    Connection,
+};
+use shellexpand;
+use std::path::PathBuf;
+use std::{env, fmt};
+use strum::IntoEnumIterator;
+use strum_macros::{EnumIter, EnumString};
+use throbber_widgets_tui::ThrobberState;
+use tui::style::Color;
+use tui::widgets::{List, ListState, TableState};
+use tui_textarea::{Input, Key, TextArea};
+// const
+
+/// SQL
+/// // TODO needs ot be dynamic
+
+pub const PAT: &str = "/.config/wyd/pat.txt";
+pub const IN_HOME_CONFIG: &str = "/.config/wyd/config";
+pub const IN_HOME_DATABASE: &str = "/.config/wyd/projects.db";
+pub const DEFAULT_IN_HOME_SEARCH: &str = "/Documents";
+///
+// pub const DATABASE: &str = "projects.db";
+pub const SEARCH_DIRECTORY_PREFIX: &str = "~/Documents/";
+pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
+pub const SUBPATH_GIT_CONFIG: &str = ".git/config";
+pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
+pub const SUB_HOME_FOLDER: &str = "/Documents/";
+
+pub fn home_path(path: &str) -> String {
+    let home = home_dir().unwrap().into_os_string().into_string().unwrap();
+
+    format!("{}{}", home, path)
+}
+
+/// UI
+pub const HIGHLIGHT_SYMBOL: &str = ">> ";
+
+pub fn fetch_config_files() -> Vec<String> {
+    let expanded_path = shellexpand::tilde(CONFIG_SEARCH_PREFIX);
+    let pattern: PathBuf = [&expanded_path, CONFIG_PATH_SUFFIX].iter().collect();
+
+    let tmp: Vec<String> = glob(pattern.to_str().unwrap())
+        .expect("expectation!!")
+        .filter_map(|x| x.ok())
+        .map(|x| {
+            x.into_os_string()
+                .into_string()
+                .unwrap()
+                .replace(SUBPATH_GIT_CONFIG, "")
+        })
+        .collect();
+
+    tmp
+}
+pub struct LoadingState {
+    pub throb: ThrobberState,
+    pub status: WindowStatus,
+}
+/// APP
+pub struct App<'a> {
+    pub message: String,
+    pub window: Window,
+    pub config: Option<Config>,
+    pub conn: &'a Connection,
+    pub throbber: LoadingState,
+    pub configs: TableItems<GitConfig>,
+    pub projects: TableItems<Project>,
+    pub todos: FilteredListItems<Todo>,
+    pub categories: PlainListItems<Category>,
+}
+
+impl<'a> App<'a> {
+    // pub fn init() -> App {
+    //     // INITIALIZE DB
+    //     let conn = Connection::open(DATABASE).unwrap();
+    //     App::load(&conn)
+    // }
+    pub fn load(conn: &'a Connection) -> App {
+        initialize_db(conn);
+        // TODO initialize config
+        let mut app = App {
+            message: "hiii".to_owned(),
+            window: Window::new(false),
+            config: None,
+            conn: &conn,
+            throbber: LoadingState {
+                throb: ThrobberState::default(),
+                status: WindowStatus::NotLoaded,
+            },
+            configs: TableItems::<GitConfig>::load(&conn),
+            projects: TableItems::<Project>::load(&conn),
+            todos: FilteredListItems::<Todo>::load(&conn),
+            categories: PlainListItems::<Category>::load(&conn),
+        };
+        match load_config() {
+            Some(config) => app.config = Some(config),
+            None => app.window.popup = PopupWindow::Config,
+        }
+
+        app
+    }
+}
+
+impl App<'_> {
+    // pub fn on_tick(&mut self) {
+    //     self.throbber.count += 1;
+    // }
+    pub fn loaded(&mut self) {
+        self.throbber.status = WindowStatus::Loaded;
+    }
+    pub fn next(&mut self) {
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => {
+                self.projects.next();
+                // TODO move to update
+                match self.projects.current() {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered =
+                            items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
+            }
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Todo,
+                ..
+            } => self.todos.next(),
+            Window {
+                popup: PopupWindow::SearchGitConfig,
+                base: _,
+                ..
+            } => self.configs.next(),
+            Window {
+                popup: PopupWindow::EditCategory,
+                base: _,
+                ..
+            } => self.categories.next(),
+            _ => {}
+        }
+    }
+    pub fn previous(&mut self) {
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => {
+                self.projects.previous();
+                // TODO move to update
+                match self.projects.current() {
+                    Some(p) => {
+                        let items = self.todos.items.clone();
+                        self.todos.filtered =
+                            items.into_iter().filter(|t| t.project_id == p.id).collect();
+                        self.todos.select_state(Some(0));
+                    }
+                    None => {}
+                }
+            }
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Todo,
+                ..
+            } => self.todos.previous(),
+            Window {
+                popup: PopupWindow::SearchGitConfig,
+                base: _,
+                ..
+            } => self.configs.previous(),
+            Window {
+                popup: PopupWindow::EditCategory,
+                base: _,
+                ..
+            } => self.categories.previous(),
+            _ => {}
+        }
+    }
+    pub fn cycle_focus_next(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Todo,
+            BaseWindow::Todo => BaseWindow::Description,
+            BaseWindow::Description => BaseWindow::Project,
+        }
+    }
+    pub fn cycle_focus_previous(&mut self) {
+        self.window.base = match self.window.base.clone() {
+            BaseWindow::Project => BaseWindow::Description,
+            BaseWindow::Todo => BaseWindow::Project,
+            BaseWindow::Description => BaseWindow::Todo,
+        }
+    }
+    pub fn cycle_popup(&mut self) {
+        match self.window.popup {
+            PopupWindow::EditCategory => {
+                self.window.popup = PopupWindow::NewCategory;
+                self.window.mode = Mode::Insert;
+            }
+            PopupWindow::NewCategory => {
+                self.window.popup = PopupWindow::EditCategory;
+                self.window.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+        // self.window.popup = match self.window.popup.clone() {
+        //     PopupWindow::EditCategory => PopupWindow::NewCategory,
+        //     PopupWindow::NewCategory => PopupWindow::EditCategory,
+        //     y => y,
+        // }
+    }
+    pub fn default_select(&mut self) {
+        // TODO what if there aren't any?
+        self.projects.state.select(Some(0));
+        self.configs.state.select(Some(0));
+        self.categories.state.select(Some(0));
+
+        match self.projects.current() {
+            Some(p) => self.todos.select_filter_state(Some(0), p.id),
+            None => (),
+        }
+    }
+
+    /// WINDOW RULES
+    pub fn popup(&mut self, popup: PopupWindow, mode: Option<Mode>) {
+        self.window.popup = popup;
+        match mode {
+            Some(m) => self.window.mode = m,
+            None => (),
+        }
+    }
+    pub fn close_popup(&mut self) {
+        self.window.popup = PopupWindow::None;
+        self.window.status = WindowStatus::NotLoaded;
+    }
+    pub fn popup_mode_insert(&mut self, textarea: &mut TextArea) {
+        match crossterm::event::read().expect("POPUP INSERT ERROR").into() {
+            Input {
+                key: Key::Char('c'),
+                ctrl: true,
+                ..
+            }
+            | Input { key: Key::Esc, .. } => self.window.mode = Mode::Normal,
+            Input {
+                key: Key::Enter, ..
+            } => {}
+            input => {
+                textarea.input(input);
+            }
+        }
+    }
+    pub fn popup_mode_normal(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
+        match crossterm::event::read().expect("POPUP NORMAL ERROR").into() {
+            Input {
+                key: Key::Char('i'),
+                ..
+            } => self.window.mode = Mode::Insert,
+            Input {
+                key: Key::Char('q'),
+                ..
+            } => {
+                self.close_popup();
+                *textarea = TextArea::default();
+            }
+            Input {
+                key: Key::Char('w'),
+                ..
+            } => {
+                if self.window.popup == PopupWindow::EditCategory {
+                    *textarea = TextArea::default();
+                    self.popup_write_and_close(textarea, popup)
+                } else {
+                    self.popup_write_and_close(textarea, popup);
+                    *textarea = TextArea::default();
+                }
+            }
+            Input { key: Key::Down, .. }
+            | Input {
+                key: Key::MouseScrollDown,
+                ..
+            } => self.next(),
+            Input { key: Key::Up, .. }
+            | Input {
+                key: Key::MouseScrollUp,
+                ..
+            } => self.previous(),
+            Input {
+                key: Key::Right, ..
+            } => self.cycle_popup(),
+            Input { key: Key::Left, .. } => self.cycle_popup(),
+            Input {
+                key: Key::Enter, ..
+            } => self.toggle(),
+            _ => {}
+        }
+    }
+    pub fn popup_write_and_close(&mut self, textarea: &mut TextArea, popup: PopupWindow) {
+        let content = textarea.lines().join("\n").to_owned();
+        match popup {
+            PopupWindow::Config => init_config(Config {
+                owner: content,
+                search_folder: home_path(DEFAULT_IN_HOME_SEARCH),
+                db: home_path(IN_HOME_DATABASE),
+            }),
+            PopupWindow::AddTodo => {
+                let project_id = match self.projects.current() {
+                    Some(p) => p.id,
+                    None => 0,
+                };
+                write_new_todo(
+                    &self.conn,
+                    vec![Todo {
+                        id: 0,
+                        parent_id: 0,
+                        project_id: project_id,
+                        todo: content,
+                        is_complete: false,
+                    }],
+                );
+
+                self.todos = FilteredListItems::<Todo>::load(&self.conn);
+                self.todos.select_filter_state(Some(0), project_id);
+            }
+            PopupWindow::EditDesc => match self.projects.current_state() {
+                (Some(idx), Some(p)) => {
+                    update_project_desc(&self.conn, p, content).expect("A");
+                    // reload projects but retain selection
+                    self.projects = TableItems::<Project>::load(&self.conn);
+                    self.projects.select_state(Some(idx));
+                }
+                _ => (),
+            },
+            PopupWindow::EditCategory => match self.projects.current_state() {
+                (Some(idx), Some(p)) => match self.categories.current() {
+                    Some(cat) => {
+                        let name = &cat.name;
+                        update_project_category(&self.conn, p, name);
+                        self.projects = TableItems::<Project>::load(&self.conn);
+                        self.projects.select_state(Some(idx));
+                    }
+                    _ => {}
+                },
+                _ => (),
+            },
+            PopupWindow::NewCategory => match self.projects.current_state() {
+                (Some(idx), Some(p)) => {
+                    update_project_category(&self.conn, p, &content).expect("BBB!");
+                    write_category(&self.conn, &content);
+                    self.categories = ListItems::<Category>::load(&self.conn);
+                    self.projects = TableItems::<Project>::load(&self.conn);
+                    self.projects.select_state(Some(idx));
+                }
+                _ => (),
+            },
+            PopupWindow::SearchGitConfig => {
+                write_tmp_to_project(&self.conn);
+                self.projects = TableItems::<Project>::load(&self.conn);
+                self.projects.select_state(Some(0));
+            }
+            _ => (),
+        }
+        self.close_popup();
+    }
+    pub fn toggle(&mut self) {
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => self.projects.toggle(&self.conn),
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Todo,
+                ..
+            } => self.todos.toggle(&self.conn),
+            Window {
+                popup: PopupWindow::SearchGitConfig,
+                base: _,
+                ..
+            } => self.configs.toggle(&self.conn),
+            Window {
+                popup: PopupWindow::EditCategory,
+                base: _,
+                ..
+            } => match self.projects.current() {
+                Some(p) => self.categories.toggle(&self.conn, p),
+                None => {}
+            },
+            _ => {}
+        }
+    }
+
+    pub fn delete_todo(&mut self) {}
+    pub fn add_project_in_dir(&mut self, is_find_git: bool) {
+        match self.window {
+            Window {
+                popup: PopupWindow::None,
+                base: BaseWindow::Project,
+                ..
+            } => {
+                // TODO discover the higher git repo
+                let path = env::current_dir().unwrap().display().to_string();
+                if is_find_git {
+                    let repo = match git2::Repository::discover(path) {
+                        Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
+                        _ => "N/A".to_string(),
+                    };
+                    write_project(
+                        &self.conn,
+                        Project {
+                            id: 0,
+                            path: repo.clone(),
+                            name: regex_last_dir(repo.clone()),
+                            desc: "N/A".to_owned(),
+                            category: "Unknown".to_owned(),
+                            status: ProjectStatus::Unstable,
+                            is_git: true,
+                            owner: guess_git_owner(repo.clone()), //TODO
+                            repo: regex_last_dir(repo.clone()),
+                            last_commit: "N/A".to_owned(),
+                        },
+                    );
+                } else {
+                    write_project(
+                        &self.conn,
+                        Project {
+                            id: 0,
+                            path: path.clone(),
+                            name: regex_last_dir(path.clone()),
+                            desc: "N/A".to_owned(),
+                            category: "Unknown".to_owned(),
+                            status: ProjectStatus::Unstable,
+                            is_git: false,
+                            owner: "quffaro".to_owned(), //TODO
+                            repo: "".to_owned(),         //TODO should be null sql
+                            last_commit: "N/A".to_owned(),
+                        },
+                    );
+                }
+                self.projects = TableItems::<Project>::load(&self.conn);
+                self.projects.select_state(Some(0));
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Project {
+    pub id: u8,
+    pub path: String,
+    pub name: String,
+    pub desc: String,
+    pub category: String,
+    pub status: ProjectStatus,
+    pub is_git: bool,
+    pub owner: String,
+    pub repo: String,
+    pub last_commit: String,
+}
+
+impl Project {
+    pub fn load(conn: &Connection) -> Vec<Project> {
+        read_project(conn).expect("READ PROJECT ERROR")
+        // vec![]
+    }
+    pub fn new_in_pwd() -> Project {
+        let current_dir = env::current_dir().unwrap().display().to_string();
+        let name = current_dir.clone();
+        Project {
+            id: 0,
+            path: current_dir.clone(),
+            name: name,
+            desc: "".to_owned(),
+            category: "Unknown".to_owned(),
+            status: ProjectStatus::Unstable,
+            is_git: false,
+            owner: "".to_owned(), //TODO
+            repo: current_dir.clone(),
+            last_commit: "N/A".to_owned(),
+        }
+    }
+    // TODO this is
+    pub fn cycle_status(&mut self, conn: &Connection) {
+        self.status = match self.status {
+            ProjectStatus::Stable => ProjectStatus::Unstable,
+            ProjectStatus::Unstable => ProjectStatus::Stable,
+        };
+        // TODO we need to write this
+        update_project_status(conn, self);
+    }
+}
+
+impl TableItems<Project> {
+    pub fn load(conn: &Connection) -> TableItems<Project> {
+        TableItems {
+            items: Project::load(conn),
+            state: TableState::default(),
+        }
+    }
+    // pub fn reload(mut self, conn: Option<Connection>, idx: Option<u8>) {
+    //     self = TableItems::<Project>::load(conn);
+    //     match idx {
+    //         Some(i) => self.select_state(i),
+    //         None => self.select_state(0),
+    //     }
+
+    // }
+    pub fn current(&self) -> Option<&Project> {
+        match self.get_state_selected() {
+            Some(idx) => self.items.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn current_state(&self) -> (Option<usize>, Option<&Project>) {
+        match self.get_state_selected() {
+            Some(idx) => (Some(idx), self.items.iter().nth(idx)),
+            None => (None, None),
+        }
+    }
+    pub fn toggle(&mut self, conn: &Connection) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].cycle_status(conn);
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+/// STRUCTS
+pub trait ListNavigate {
+    fn get_items_len<'a>(&'a self) -> usize;
+    fn get_state_selected<'a>(&'a self) -> Option<usize>;
+    fn select_state<'a>(&'a mut self, idx: Option<usize>);
+    fn next(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(i), l) => {
+                if i >= l - 1 {
+                    self.select_state(Some(0))
+                } else {
+                    self.select_state(Some(i + 1))
+                };
+            }
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn previous(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(0), l) => self.select_state(Some(l - 1)),
+            (Some(i), _) => self.select_state(Some(i - 1)),
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn unselect(&mut self) {
+        self.select_state(None);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ListItems<T> {
+    pub items: Vec<T>,
+    pub state: ListState,
+}
+
+impl<T> ListNavigate for ListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
+
+// TODO
+
+#[derive(Clone, Debug)]
+pub struct FilteredListItems<T> {
+    pub items: Vec<T>,
+    pub filtered: Vec<T>,
+    pub state: ListState,
+}
+
+impl<T> ListNavigate for FilteredListItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TableItems<T> {
+    pub items: Vec<T>,
+    pub state: TableState,
+}
+
+impl<T> ListNavigate for TableItems<T> {
+    fn get_items_len<'a>(&'a self) -> usize {
+        self.items.len()
+    }
+    fn get_state_selected<'a>(&'a self) -> Option<usize> {
+        self.state.selected()
+    }
+    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
+        self.state.select(idx)
+    }
+    fn next(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(i), l) => {
+                if i >= l - 1 {
+                    self.select_state(Some(0))
+                } else {
+                    self.select_state(Some(i + 1))
+                };
+            }
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+    fn previous(&mut self) {
+        match (self.get_state_selected(), self.get_items_len()) {
+            (_, 0) => {}
+            (Some(0), l) => self.select_state(Some(l - 1)),
+            (Some(i), _) => self.select_state(Some(i - 1)),
+            (None, _) => self.select_state(Some(0)),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GitConfig {
+    pub path: String,
+    pub is_selected: bool,
+}
+
+impl GitConfig {
+    pub fn load(conn: &Connection) -> Vec<GitConfig> {
+        // TODO unwrap
+        read_tmp(conn).unwrap()
+        // vec![]
+    }
+}
+
+impl TableItems<GitConfig> {
+    pub fn load(conn: &Connection) -> TableItems<GitConfig> {
+        TableItems {
+            items: GitConfig::load(conn),
+            state: TableState::default(),
+        }
+    }
+    pub fn toggle(&mut self, conn: &Connection) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                self.items[i].is_selected = !self.items[i].is_selected;
+                update_tmp(conn, &self.items[i]); // TODO
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+// TODO i would like to nest these guys
+#[derive(Clone, Debug)]
+pub struct Todo {
+    pub id: u8,
+    pub parent_id: u8,
+    pub project_id: u8,
+    pub todo: String,
+    pub is_complete: bool,
+}
+
+impl FilteredListItems<Todo> {
+    pub fn load(conn: &Connection) -> FilteredListItems<Todo> {
+        FilteredListItems {
+            items: read_todo(conn).expect("AA"),
+            filtered: vec![],
+            state: ListState::default(),
+        }
+    }
+    // TODO this is an imperfect one...
+    pub fn sort_by_complete(&mut self) {
+        self.filtered
+            .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
+    }
+    // TODO can this be a method for ListNavigate?
+    pub fn toggle(&mut self, conn: &Connection) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.filtered.len() {
+            if i == selected {
+                self.filtered[i].is_complete = !self.filtered[i].is_complete;
+                update_todo(conn, &self.filtered[i]).expect("msg");
+            } else {
+                continue;
+            }
+        }
+        self.sort_by_complete()
+    }
+    pub fn select_filter_state(&mut self, idx: Option<usize>, project_id: u8) {
+        self.state.select(idx);
+        self.filter_from_projects(project_id);
+    }
+    pub fn filter_from_projects(&mut self, project_id: u8) {
+        let items = self.items.clone();
+        self.filtered = items
+            .into_iter()
+            .filter(|t| t.project_id == project_id)
+            .collect();
+    }
+}
+
+/// ENUMS
+/// WINDOWS
+pub struct Window {
+    pub base: BaseWindow,
+    pub popup: PopupWindow,
+    pub status: WindowStatus,
+    pub mode: Mode,
+}
+
+impl Window {
+    fn new(needs_config: bool) -> Window {
+        Window {
+            base: BaseWindow::Project,
+            popup: if needs_config {
+                PopupWindow::Config
+            } else {
+                PopupWindow::None
+            },
+            status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
+        }
+    }
+    pub fn mode_color(&self) -> Color {
+        match self.mode {
+            Mode::Insert => Color::Yellow,
+            Mode::Normal => Color::Green,
+        }
+    }
+    pub fn base_focus_color(&self, window: BaseWindow) -> Color {
+        match self {
+            Window {
+                popup: PopupWindow::None,
+                base: _,
+                ..
+            } => Color::Yellow,
+            _ => Color::White,
+        }
+    }
+    fn to_project() -> Window {
+        Window {
+            base: BaseWindow::Project,
+            popup: PopupWindow::None,
+            status: WindowStatus::NotLoaded,
+            mode: Mode::Insert,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
+pub enum BaseWindow {
+    Project,
+    Todo,
+    Description,
+}
+
+impl fmt::Display for BaseWindow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Project => write!(f, "PROJECTS"),
+            Self::Todo => write!(f, "TODO"),
+            Self::Description => write!(f, "DESC"),
+        }
+    }
+}
+
+impl ListItems<BaseWindow> {
+    fn new() -> ListItems<BaseWindow> {
+        ListItems {
+            items: BaseWindow::iter().collect(),
+            state: ListState::default(),
+        }
+    }
+    pub fn current(&mut self) -> Option<&BaseWindow> {
+        let idx = self.get_state_selected().unwrap();
+        self.items.iter().nth(idx)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, EnumIter, EnumString)]
+pub enum PopupWindow {
+    None,
+    SearchGitConfig,
+    AddTodo,
+    EditCategory,
+    EditDesc,
+    NewCategory,
+    Help,
+    Config,
+}
+
+impl ListItems<PopupWindow> {
+    fn new() -> ListItems<PopupWindow> {
+        ListItems {
+            items: PopupWindow::iter().collect(),
+            state: ListState::default(),
+        }
+    }
+    fn current(&mut self) -> &PopupWindow {
+        let idx = self.get_state_selected().unwrap();
+        &self.items.iter().nth(idx).unwrap()
+    }
+}
+
+pub enum WindowStatus {
+    Loaded,
+    NotLoaded,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Category {
+    pub id: u8,
+    pub name: String,
+}
+
+impl fmt::Display for Category {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Category {
+    pub fn load(conn: &Connection) -> Vec<Category> {
+        read_category(conn).expect("READ CATEGORY ERROR")
+    }
+}
+
+// impl FromSql for Category {
+//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+//         value
+//             .as_str()?
+//             .parse::<String>()
+//             .map_err(|e| FromSqlError::Other(Box::new(e)))
+//     }
+// }
+
+impl ListItems<Category> {
+    pub fn load(conn: &Connection) -> ListItems<Category> {
+        ListItems {
+            items: Category::load(conn),
+            state: ListState::default(),
+        }
+    }
+    // TODO toggle
+    pub fn current(&self) -> Option<&Category> {
+        match self.get_state_selected() {
+            Some(idx) => self.items.iter().nth(idx),
+            None => None,
+        }
+    }
+    pub fn toggle(&mut self, conn: &Connection, project: &Project) {
+        let selected = self.state.selected().unwrap();
+        for i in 0..self.items.len() {
+            if i == selected {
+                update_project_category(conn, project, &self.items[i].name); // TODO not the best!
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Mode {
+    Normal,
+    Insert,
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Normal => write!(f, "NORMAL"),
+            Self::Insert => write!(f, "INSERT"),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, EnumString)]
+pub enum ProjectStatus {
+    Stable,
+    Unstable,
+}
+
+impl fmt::Display for ProjectStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+// TODO refactor to include-sql
+impl FromSql for ProjectStatus {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse::<ProjectStatus>()
+            .map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
+}
+#[derive(Debug)]
+pub struct Config {
+    pub owner: String,
+    pub search_folder: String,
+    pub db: String,
+}

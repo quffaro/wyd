@@ -1,103 +1,42 @@
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
-use std::fmt;
-// use std::str::FromStr;
-use strum_macros::{EnumIter, EnumString};
-use tui::style::Color;
+use const_format::formatcp;
+use dirs::home_dir;
 
-/// SQL
-pub const DATABASE: &str = "projects.db";
-pub const SEARCH_DIRECTORY_PREFIX: &str = "/home/cuffaro/Documents"; // CUFFARO IS NOT GUARANTEED!
-pub const CONFIG_PATH_SUFFIX: &str = "**/.git/config";
-// TODO needs ot be dynamic
-pub const CONFIG_SEARCH_PREFIX: &str = "~/Documents/";
+/// Application.
+pub mod app;
 
-/// WINDOWS
-pub const WINDOW_PROJECTS: &str = "projects";
-pub const WINDOW_TODO: &str = "todo";
-pub const WINDOW_DESCRIPTION: &str = "description";
-pub const WINDOW_POPUP_CONFIGS: &str = "configs";
-pub const WINDOW_POPUP_ADD_TODO: &str = "add-todo";
-pub const WINDOW_POPUP_EDIT: &str = "edit";
-pub const WINDOW_POPUP_DESC: &str = "desc";
+/// Terminal events handler.
+pub mod event;
 
-#[derive(PartialEq, Eq, Debug, Clone, EnumString, EnumIter)]
-pub enum Category {
-    Unknown,
-    Math,
-    Haskell,
-    OCaml,
-    Rust,
-}
+/// Terminal user interface.
+pub mod tui;
 
-impl fmt::Display for Category {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+/// Event handler.
+pub mod handler;
 
-impl FromSql for Category {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<Category>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
+/// SQL scripts
+pub mod sql;
 
-#[derive(PartialEq, Eq, Debug, Clone, EnumString)]
-pub enum Status {
-    Stable,
-    Unstable,
-}
+/// Request 
+pub mod request;
 
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-// TODO refactor to include-sql
-impl FromSql for Status {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<Status>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
+const CONFIG: &str = "/.config/wyd/";
+const PAT: &str = "pat.txt";
+const DB: &str = "wyd.db";
+const WYD_CONFIG: &str = "config";
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum Mode {
-    Normal,
-    Insert,
-}
+pub const PATH_PAT: &str = formatcp!("{}{}", CONFIG, PAT);
+pub const PATH_DB: &str = formatcp!("{}{}", CONFIG, DB);
+pub const PATH_CONFIG: &str = formatcp!("{}{}", CONFIG, WYD_CONFIG);
 
-impl Mode {
-    fn help_message(&self) -> &'static str {
-        match self {
-            Self::Normal => "type q to quit, type i to enter insert mode",
-            Self::Insert => "type Esc to back to normal mode",
-        }
-    }
 
-    fn cursor_color(&self) -> Color {
-        match self {
-            Self::Normal => Color::Reset,
-            Self::Insert => Color::LightBlue,
-        }
-    }
-}
+pub const GITCONFIG_SUFFIX: &str = ".git/config";
+pub const GLOB_GITCONFIG_SUFFIX: &str = formatcp!("**/{}", GITCONFIG_SUFFIX);
+pub const CONFIG_SEARCH_FOLDER: &str = "~/Documents/";
 
-impl fmt::Display for Mode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            Self::Normal => write!(f, "NORMAL"),
-            Self::Insert => write!(f, "INSERT"),
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum WindowStatus {
-    Loaded,
-    NotLoaded,
+pub fn home_path(path: &str) -> String {
+    format!(
+        "{}{}",
+        home_dir().unwrap().into_os_string().into_string().unwrap(),
+        path.to_owned()
+    )
 }
