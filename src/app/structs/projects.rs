@@ -9,6 +9,7 @@ use strum_macros::EnumString;
 #[derive(Debug, Clone)]
 pub struct Project {
     pub id: u8,
+    pub sort_order: u8,
     pub path: String,
     pub name: String,
     pub desc: String,
@@ -30,6 +31,7 @@ impl Project {
         let name = current_dir.clone();
         Project {
             id: 0,
+            sort_order: 0,
             path: current_dir.clone(),
             name: name,
             desc: "".to_owned(),
@@ -50,6 +52,8 @@ impl Project {
         // TODO we need to write this
         update_project_status(conn, self);
     }
+
+    
 }
 
 impl TableItems<Project> {

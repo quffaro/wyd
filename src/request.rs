@@ -78,7 +78,7 @@ pub async fn request(owner: &String, project: &Project) -> Result<serde_json::Va
         .and_then(|v| v.get("commit"))
         .and_then(|v| v.get("committer"))
         .and_then(|v| v.get("date"))
-        .unwrap_or(&json!("N/A"))
+        .unwrap_or(&json!("N/A")) // TODO get last commit
         .to_owned();
 
     // println!("{:#?}", result);

@@ -77,22 +77,19 @@ pub fn get_config_color(config: Ini) -> ColorConfig {
         bd: WydColor::from_str(
             config
                 .get_from(Some("color"), "bd")
-                .ok_or("Yellow")
-                .unwrap(),
+                .unwrap_or_else(|| "Yellow")
         )
         .unwrap(),
         hl: WydColor::from_str(
             config
                 .get_from(Some("color"), "hl")
-                .ok_or("Yellow")
-                .unwrap(),
+                .unwrap_or_else(|| "Yellow")
         )
         .unwrap(),
         bg: WydColor::from_str(
             config
                 .get_from(Some("color"), "bg")
-                .ok_or("Yellow")
-                .unwrap(),
+                .unwrap_or_else(|| "Yellow")
         )
         .unwrap(),
     }
