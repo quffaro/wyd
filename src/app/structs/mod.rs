@@ -79,7 +79,7 @@ impl<T> ListNav for FilteredListItems<T> {
         }
     }
     fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
+        self.filtered.len()
     }
     fn get_state_selected<'a>(&'a self) -> Option<usize> {
         self.state.selected()

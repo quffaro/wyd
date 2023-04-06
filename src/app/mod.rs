@@ -302,9 +302,9 @@ impl App {
             .constraints(
                 [
                     Constraint::Min(3),
+                    Constraint::Percentage(50),
                     Constraint::Percentage(40),
-                    Constraint::Percentage(40),
-                    Constraint::Max(3),
+                    Constraint::Min(3),
                 ]
                 .as_ref(),
             )
@@ -365,17 +365,14 @@ impl App {
         self.is_popup_loading = false;
         self.window.close_popup()
     }
-
     // INPUT RULES
     pub fn default_input(&mut self) {
         self.input = Input::default()
     }
-
     pub fn default_close(&mut self) {
         self.default_input();
         self.close_popup();
     }
-
     // SQL RULES
     fn write_todo(&mut self, conn: &Connection) {
         let project_id = match self.projects.current() {
