@@ -80,7 +80,11 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         .highlight_style(
             Style::default()
                 .bg(if app.window.popup == Popup::None {
-                    Color::Yellow
+                    if app.window.mode == Mode::Normal {
+                        Color::Yellow
+                    } else {
+                        Color::Magenta
+                    }
                 } else {
                     Color::White
                 })
@@ -108,11 +112,12 @@ pub fn render_todo<'a>(app: &App) -> Table<'a> {
         })
         .collect();
 
+    // dbg!(&rows);
     let todos = Table::new(rows)
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()
-                .title("(projects)")
+                .title("(todo)")
                 .borders(Borders::ALL)
                 .style(
                     Style::default()

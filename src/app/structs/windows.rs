@@ -26,7 +26,7 @@ impl Window {
                 false => Popup::Config,
             },
             status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
+            mode: Mode::Normal,
         }
     }
     pub fn mode_color(&self) -> Color {

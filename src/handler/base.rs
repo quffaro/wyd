@@ -26,10 +26,11 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
         KeyCode::Char('r') => app.popup(Popup::EditCat, Some(Mode::Insert)),
         KeyCode::Char('R') => app.popup(Popup::NewCat, None),
         KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
-        KeyCode::Char('y') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
-        KeyCode::Char('p') => app.cycle_priority(),
+        KeyCode::Char('e') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
+        KeyCode::Char('y') => app.yank(),
+        KeyCode::Char('p') => app.paste(),
+        KeyCode::Char('c') => app.cycle_priority(),
         KeyCode::Char('G') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
-        KeyCode::Char('g') => {}
         KeyCode::Char('d') => app.popup(Popup::DeleteProject, None),
         KeyCode::Char('h') => app.popup(Popup::Help, None),
         _ => {}

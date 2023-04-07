@@ -1,7 +1,6 @@
-use std::env;
-
 use crate::app::structs::projects::{Project, ProjectBuilder};
 use rusqlite::{params, Connection, Result};
+use std::env;
 
 const READ_PROJECT: &str =
     "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project";
@@ -23,6 +22,7 @@ pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> 
                 .owner(row.get(7)?)
                 .repo(row.get(8)?)
                 .last_commit(row.get(9)?)
+                .sort(row.get(10)?)
                 .build();
             Ok(project)
         })
@@ -125,6 +125,18 @@ pub fn update_project_last_commit(
     Ok(())
 }
 
+const UPDATE_PROJECT_SORT: &str = "update project set sort = ?1 where id = ?2;";
+pub fn update_project_sort(
+    conn: &Connection,
+    p_id: usize,
+    sort: usize,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(UPDATE_PROJECT_SORT, params![sort, p_id])
+        .expect("AAA");
+
+    Ok(())
+}
+
 const UPDATE_PROJECT_STATUS: &str = "update project set status = ?1 where id = ?2;";
 pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
     conn.execute(
@@ -146,6 +158,14 @@ pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqli
 
 pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
     let path = env::current_dir().unwrap().display().to_string();
+    let project_build = ProjectBuilder::new()
+        .desc("N/A".to_owned())
+        .category("Unknown".to_owned())
+        .status(crate::app::structs::projects::ProjectStatus::Unstable)
+        .is_git(true)
+        .owner("Unknown".to_owned()) // TODO get from config
+        .repo("".to_owned()) // TODO default)
+        .last_commit("".to_owned());
     if is_find_git {
         let repo = match git2::Repository::discover(path) {
             Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
@@ -153,37 +173,15 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
         };
         write_project(
             conn,
-            // TODO constructor in struct/project
-            Project {
-                id: 0,
-                path: repo.clone(),
-                name: crate::app::regex::regex_last_dir(repo.clone()),
-                desc: "N/A".to_owned(),
-                category: "Unknown".to_owned(),
-                status: crate::app::structs::projects::ProjectStatus::Unstable,
-                is_git: true,
-                owner: crate::app::structs::gitconfig::guess_git_owner(repo.clone()), //TODO
-                repo: crate::app::regex::regex_last_dir(repo.clone()),
-                last_commit: "N/A".to_owned(),
-                sort: 0,
-            },
+            project_build
+                .owner(crate::app::structs::gitconfig::guess_git_owner(
+                    repo.clone(),
+                ))
+                .name(crate::app::regex::regex_last_dir(repo.clone()))
+                .repo(crate::app::regex::regex_last_dir(repo.clone()))
+                .build(),
         );
     } else {
-        write_project(
-            conn,
-            Project {
-                id: 0,
-                path: path.clone(),
-                name: crate::app::regex::regex_last_dir(path.clone()),
-                desc: "N/A".to_owned(),
-                category: "Unknown".to_owned(),
-                status: crate::app::structs::projects::ProjectStatus::Unstable,
-                is_git: false,
-                owner: "quffaro".to_owned(), //TODO
-                repo: "".to_owned(),         //TODO should be null sql
-                last_commit: "N/A".to_owned(),
-                sort: 0,
-            },
-        );
+        write_project(conn, project_build.path(path).build());
     }
 }

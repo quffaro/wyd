@@ -61,5 +61,7 @@ impl FilteredListItems<Todo> {
             .into_iter()
             .filter(|t| t.project_id == project_id)
             .collect();
+
+        self.sort_by_complete()
     }
 }

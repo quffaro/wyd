@@ -13,7 +13,7 @@ use crate::app::ui::{
     popup::render_popup_todo,
     render_loading,
 };
-use crate::sql::project::{update_project_desc, write_project};
+use crate::sql::project::{update_project_desc, update_project_sort, write_project};
 use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -492,5 +492,32 @@ impl App {
             .clone()
             .and_then(|c| Some(wyd_to_color(c.color.bd)))
             .unwrap()
+    }
+
+    pub fn yank(&mut self) {
+        if self.window.base == BaseWindow::Project {
+            match self.projects.current() {
+                Some(p) => {
+                    self.index = p.id as usize;
+                    self.window.to_insert()
+                }
+                None => {}
+            }
+        }
+    }
+
+    pub fn paste(&mut self) {
+        if self.window.base == BaseWindow::Project {
+            match self.projects.current() {
+                Some(p) => {
+                    let conn = Connection::open(home_path(PATH_DB)).unwrap();
+                    update_project_sort(&conn, self.index, (p.sort + 1).into());
+                    self.reload();
+                    self.index = 0;
+                    self.window.to_normal();
+                }
+                None => {}
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 // use crate::app::structs;
 use super::{ListNav, TableItems, TableState};
 use crate::sql::project::{read_project, update_project_status};
+use itertools::Itertools;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Connection;
 use std::{env, fmt};
@@ -26,8 +27,15 @@ impl Project {
         ProjectBuilder::default()
     }
     pub fn load(conn: &Connection) -> Vec<Project> {
-        read_project(conn).expect("READ PROJECT ERROR")
+        let projects = read_project(conn).expect("READ PROJECT ERROR");
+
+        let sorted = projects.into_iter().sorted_by_key(|x| x.sort).collect();
+        // dbg!(&projects);
+        // projects.iter().sorted_by_key(|x| x.sort);
+        // dbg!(&projects);
+        sorted
     }
+    // TODO
     pub fn new_in_pwd() -> Project {
         let current_dir = env::current_dir().unwrap().display().to_string();
         let name = current_dir.clone();
@@ -121,7 +129,7 @@ impl ProjectBuilder {
     }
     pub fn build(self) -> Project {
         Project {
-            id: 0, // TODO default
+            id: self.id, // TODO default
             sort: self.sort,
             path: self.path,
             name: self.name,
