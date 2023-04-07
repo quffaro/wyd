@@ -1,32 +1,30 @@
 use std::env;
 
-use crate::app::structs::projects::Project;
+use crate::app::structs::projects::{Project, ProjectBuilder};
 use rusqlite::{params, Connection, Result};
 
 const READ_PROJECT: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from project";
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project";
 pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
         .query_map([], |row| {
-            Ok(Project {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                desc: match row.get(3)? {
+            let project: Project = ProjectBuilder::new()
+                .id(row.get(0)?)
+                .path(row.get(1)?)
+                .name(row.get(2)?)
+                .desc(match row.get(3)? {
                     Some(x) => x,
-                    None => "N/A".to_string(),
-                },
-                category: row.get(4)?,
-                status: row.get(5)?, // TODO is this the best way?
-                is_git: row.get(6)?,
-                owner: row.get(7)?,
-                repo: row.get(8)?,
-                last_commit: match row.get(9)? {
-                    Some(x) => x,
-                    None => "N/A".to_string(),
-                },
-            })
+                    None => "N/A".to_owned(),
+                })
+                .category(row.get(4)?)
+                .status(row.get(5)?)
+                .is_git(row.get(6)?)
+                .owner(row.get(7)?)
+                .repo(row.get(8)?)
+                .last_commit(row.get(9)?)
+                .build();
+            Ok(project)
         })
         .expect("A!!")
         .collect();
@@ -35,29 +33,28 @@ pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> 
 }
 /// READ PROJECTS FROM DB
 const READ_PROJECT_REPOS: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from project where repo is not null and owner is not null";
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project where repo is not null and owner is not null";
 pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT_REPOS)?;
     let res = stmt
         .query_map([], |row| {
-            Ok(Project {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                desc: match row.get(3)? {
+            let project: Project = ProjectBuilder::new()
+                .id(row.get(0)?)
+                .path(row.get(1)?)
+                .name(row.get(2)?)
+                .desc(match row.get(3)? {
                     Some(x) => x,
-                    None => "N/A".to_string(),
-                },
-                category: row.get(4)?,
-                status: row.get(5)?, // TODO is this the best way?
-                is_git: row.get(6)?,
-                owner: row.get(7)?,
-                repo: row.get(8)?,
-                last_commit: match row.get(9)? {
-                    Some(x) => x,
-                    None => "N/A".to_string(),
-                },
-            })
+                    None => "N/A".to_owned(),
+                })
+                .category(row.get(4)?)
+                .status(row.get(5)?)
+                .is_git(row.get(6)?)
+                .owner(row.get(7)?)
+                .repo(row.get(8)?)
+                .last_commit(row.get(9)?)
+                .sort(row.get(10)?)
+                .build();
+            Ok(project)
         })
         .expect("A!!")
         .collect();
@@ -74,8 +71,9 @@ const INSERT_PROJECT: &str = "insert into project (
     is_git,
     owner,
     repo,
-    last_commit
-) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)";
+    last_commit,
+    sort
+) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)";
 pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite::Error> {
     let mut stmt = conn.prepare(INSERT_PROJECT)?;
     stmt.execute(params![
@@ -88,6 +86,7 @@ pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite
         project.owner,
         project.repo,
         project.last_commit,
+        project.sort,
     ]);
 
     Ok(())
@@ -154,6 +153,7 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
         };
         write_project(
             conn,
+            // TODO constructor in struct/project
             Project {
                 id: 0,
                 path: repo.clone(),
@@ -165,6 +165,7 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
                 owner: crate::app::structs::gitconfig::guess_git_owner(repo.clone()), //TODO
                 repo: crate::app::regex::regex_last_dir(repo.clone()),
                 last_commit: "N/A".to_owned(),
+                sort: 0,
             },
         );
     } else {
@@ -181,6 +182,7 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
                 owner: "quffaro".to_owned(), //TODO
                 repo: "".to_owned(),         //TODO should be null sql
                 last_commit: "N/A".to_owned(),
+                sort: 0,
             },
         );
     }

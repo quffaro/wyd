@@ -7,6 +7,7 @@ pub mod todo;
 
 const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     id          integer primary key autoincrement, 
+    sort        integer,
     path        varchar(255), 
     name        varchar(255), 
     desc        varchar(4000), 
@@ -25,6 +26,7 @@ const CREATE_PROJECT_PATH: &str = "CREATE TABLE IF NOT EXISTS project_path (
     path        varchar(4000)
 );";
 const CREATE_VIEW_PROJECT: &str = "
+    DROP VIEW IF EXISTS v_project;
     CREATE VIEW v_project
     AS SELECT
     `t`.`id`          AS `id`,

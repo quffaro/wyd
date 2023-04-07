@@ -1,6 +1,6 @@
 use crate::app::regex::regex_last_dir;
 use crate::app::structs::gitconfig::{fetch_config_files, guess_git_owner, GitConfig};
-use crate::app::structs::projects::{Project, ProjectStatus};
+use crate::app::structs::projects::{Project, ProjectBuilder, ProjectStatus};
 use crate::{home_path, PATH_DB};
 use rusqlite::{Connection, Result};
 
@@ -62,18 +62,31 @@ pub fn write_tmp_to_project(conn: &Connection) -> Result<(), rusqlite::Error> {
     let tmp_project: Result<Vec<Project>, rusqlite::Error> = read_stmt
         .query_map([], |row| {
             // TODO error handle git2 error for rusqlite
-            Ok(Project {
-                id: 0,
-                path: row.get(0)?,
-                name: regex_last_dir(row.get(0)?),
-                desc: "Example".to_owned(),
-                category: "Unknown".to_owned(),
-                status: ProjectStatus::Unstable,
-                is_git: true,
-                owner: guess_git_owner(row.get(0)?),
-                repo: regex_last_dir(row.get(0)?),
-                last_commit: "N/A".to_owned(),
-            })
+            let project: Project = ProjectBuilder::new()
+                .path(row.get(0)?)
+                .name(regex_last_dir(row.get(0)?))
+                .desc("Example".to_owned())
+                .category("Unknown".to_owned())
+                .status(ProjectStatus::Unstable)
+                .is_git(true)
+                .owner(guess_git_owner(row.get(0)?))
+                .repo(regex_last_dir(row.get(0)?))
+                .last_commit("N/A".to_owned())
+                .build();
+            Ok(
+                project, // Project {
+                        // id: 0,
+                        // path: row.get(0)?,
+                        // name: regex_last_dir(row.get(0)?),
+                        // desc: "Example".to_owned(),
+                        // category: "Unknown".to_owned(),
+                        // status: ProjectStatus::Unstable,
+                        // is_git: true,
+                        // owner: guess_git_owner(row.get(0)?),
+                        // repo: regex_last_dir(row.get(0)?),
+                        // last_commit: "N/A".to_owned(),
+                        // }
+            )
         })
         .expect("AAAA")
         .collect();
