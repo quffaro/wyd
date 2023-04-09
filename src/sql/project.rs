@@ -73,7 +73,11 @@ const INSERT_PROJECT: &str = "insert into project (
     repo,
     last_commit,
     sort
-) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)";
+) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);";
+const INSERT_INTO_PROJECT_PATH: &str = "insert into project_path (
+    path,
+    project_id
+) values (?1, ?2);";
 pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite::Error> {
     let mut stmt = conn.prepare(INSERT_PROJECT)?;
     stmt.execute(params![
@@ -88,6 +92,8 @@ pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite
         project.last_commit,
         project.sort,
     ]);
+    let mut path_stmt = conn.prepare(INSERT_INTO_PROJECT_PATH)?;
+    path_stmt.execute(params![project.path, conn.last_insert_rowid(),]);
 
     Ok(())
 }
@@ -158,7 +164,9 @@ pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqli
 
 pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
     let path = env::current_dir().unwrap().display().to_string();
+    let copy = path.clone();
     let project_build = ProjectBuilder::new()
+        .path(path)
         .desc("N/A".to_owned())
         .category("Unknown".to_owned())
         .status(crate::app::structs::projects::ProjectStatus::Unstable)
@@ -167,7 +175,7 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
         .repo("".to_owned()) // TODO default)
         .last_commit("".to_owned());
     if is_find_git {
-        let repo = match git2::Repository::discover(path) {
+        let repo = match git2::Repository::discover(copy) {
             Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
             _ => "N/A".to_string(),
         };
@@ -182,6 +190,6 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
                 .build(),
         );
     } else {
-        write_project(conn, project_build.path(path).build());
+        write_project(conn, project_build.build());
     }
 }

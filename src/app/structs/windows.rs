@@ -52,6 +52,7 @@ impl Window {
     pub fn close_popup(&mut self) {
         self.popup = Popup::None;
         self.status = WindowStatus::NotLoaded;
+        self.mode = Mode::Normal;
     }
     pub fn base_focus_color(&self) -> Color {
         match self {
@@ -68,7 +69,7 @@ impl Window {
             base: BaseWindow::Project,
             popup: Popup::None,
             status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
+            mode: Mode::Normal,
         }
     }
 }
@@ -114,6 +115,7 @@ pub enum Popup {
     Help,
     Config,
     DeleteProject,
+    NewProject,
 }
 
 impl fmt::Display for Popup {
@@ -128,6 +130,7 @@ impl fmt::Display for Popup {
             Self::Help => write!(f, "HELP"),
             Self::Config => write!(f, "CONFIG"),
             Self::DeleteProject => write!(f, "DELETE PROJECT"),
+            Self::NewProject => write!(f, "NEW PROJECT"),
         }
     }
 }

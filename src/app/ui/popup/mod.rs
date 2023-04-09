@@ -16,6 +16,38 @@ use ratatui::widgets::{
 };
 use std::env;
 
+pub fn render_popup_new_project<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
+    let size = frame.size();
+    let area = centered_rect(40, 10, size);
+    frame.render_widget(Clear, area);
+
+    let (owner, directory) = centered_rect_config(40, 10, size);
+
+    let width = area.width.max(3) - 3;
+    let scroll = app.input.visual_scroll(width as usize);
+    let text = Paragraph::new(app.input.value())
+        .style(Style::default().fg(match app.window.mode {
+            Mode::Insert => Color::Yellow,
+            Mode::Normal => Color::Green,
+        }))
+        .wrap(Wrap { trim: false })
+        .block(
+            Block::default()
+                .title("(project name)")
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL),
+        );
+
+    frame.render_widget(text, area);
+    match app.window.mode {
+        Mode::Normal => {}
+        Mode::Insert => frame.set_cursor(
+            area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
+            area.y + 1,
+        ),
+    }
+}
+
 pub fn render_theme_picker<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
     let size = frame.size();
     let area = centered_rect(40, 10, size);
@@ -86,7 +118,8 @@ pub fn render_popup_delete_project<'a, B: Backend>(app: &mut App, frame: &mut Fr
     frame.render_widget(tabs, area);
 }
 
-pub fn render_popup_wyd_confg<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
+// TODO fix spelling
+pub fn render_popup_wyd_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
     let size = frame.size();
     let area = centered_rect(40, 10, size);
     frame.render_widget(Clear, area);
@@ -94,6 +127,8 @@ pub fn render_popup_wyd_confg<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
     let (owner, directory) = centered_rect_config(40, 10, size);
 
     // OWNER
+    let width = area.width.max(3) - 3;
+    let scroll = app.input.visual_scroll(width as usize);
     let text = Paragraph::new(app.input.value())
         .style(Style::default().fg(match app.window.mode {
             Mode::Insert => Color::Yellow,
@@ -109,6 +144,13 @@ pub fn render_popup_wyd_confg<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
 
     // SEARCH DIRECTORY
     frame.render_widget(text, area);
+    match app.window.mode {
+        Mode::Normal => {}
+        Mode::Insert => frame.set_cursor(
+            area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
+            area.y + 1,
+        ),
+    }
 }
 
 pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
@@ -311,6 +353,8 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
                 _ => {}
             }
 
+            let width = area.width.max(3) - 3;
+            let scroll = app.input.visual_scroll(width as usize);
             let text = Paragraph::new(app.input.value())
                 .style(Style::default().fg(match app.window.mode {
                     Mode::Insert => Color::Yellow,
@@ -325,14 +369,21 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
                 );
 
             frame.render_widget(text, area);
+            match app.window.mode {
+                Mode::Normal => {}
+                Mode::Insert => frame.set_cursor(
+                    area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
+                    area.y + 1,
+                ),
+            }
         }
         None => {
-            let size = frame.size();
-            let area = centered_rect(40, 40, size);
-            frame.render_widget(Clear, area);
+            // let size = frame.size();
+            // let area = centered_rect(40, 40, size);
+            // frame.render_widget(Clear, area);
 
-            let msg = Paragraph::new("No project selected".to_owned());
-            frame.render_widget(msg, area);
+            // let msg = Paragraph::new("No project selected".to_owned());
+            // frame.render_widget(msg, area);
         }
     }
 }
@@ -343,6 +394,8 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
             frame.render_widget(Clear, area);
+            let width = area.width.max(3) - 3;
+            let scroll = app.input.visual_scroll(width as usize);
 
             let text = Paragraph::new(app.input.value())
                 .style(Style::default().fg(match app.window.mode {
@@ -358,6 +411,13 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
                 );
 
             frame.render_widget(text, area);
+            match app.window.mode {
+                Mode::Normal => {}
+                Mode::Insert => frame.set_cursor(
+                    area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
+                    area.y + 1,
+                ),
+            }
         }
         None => {
             let size = frame.size();
