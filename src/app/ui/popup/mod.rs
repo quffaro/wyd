@@ -388,6 +388,44 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
     }
 }
 
+pub fn render_popup_read_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
+    match app.todos.current() {
+        Some(t) => {
+            let size = frame.size();
+            let area = centered_rect(40, 40, size);
+            frame.render_widget(Clear, area);
+            let width = area.width.max(3) - 3;
+            let scroll = app.input.visual_scroll(width as usize);
+
+            let text = Paragraph::new(t.todo.clone())
+                .style(Style::default().fg(Color::Yellow))
+                .wrap(Wrap { trim: false })
+                .block(
+                    Block::default()
+                        .title("(read todo)")
+                        .title_alignment(Alignment::Left)
+                        .borders(Borders::ALL),
+                );
+
+            frame.render_widget(text, area);
+            // match app.window.mode {
+            //     Mode::Normal => {}
+            //     Mode::Insert => frame.set_cursor(
+            //         area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
+            //         area.y + 1,
+            //     ),
+            // }
+        }
+        None => {
+            // let size = frame.size();
+            // let area = centered_rect(40, 40, size);
+            // frame.render_widget(Clear, area);
+
+            // let msg = Paragraph::new("No project selected".to_owned());
+            // frame.render_widget(msg, area);
+        }
+    }
+}
 pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
     match app.projects.current() {
         Some(_) => {

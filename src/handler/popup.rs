@@ -1,9 +1,43 @@
 use crate::app::{
+    structs::projects::ProjectBuilder,
     structs::windows::{Mode, Popup},
     App,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use tui_input::backend::crossterm::EventHandler;
+
+pub fn handle_popup_new_project(key_event: KeyEvent, app: &mut App) {
+    match app.window.mode {
+        Mode::Insert => match key_event {
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } => app.window.to_normal(),
+            event => {
+                app.input.handle_event(&Event::Key(event));
+            }
+        },
+        /* COMMON */
+        Mode::Normal => match key_event {
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                ..
+            } => app.default_close(),
+            KeyEvent {
+                code: KeyCode::Char('w'),
+                ..
+            } => app.write_close_new_project(
+                ProjectBuilder::new()
+                    .name(app.input.value().to_owned())
+                    .build(),
+            ),
+            KeyEvent {
+                code: KeyCode::Char('i'),
+                ..
+            } => app.window.to_insert(),
+            _ => {}
+        },
+    }
+}
 
 pub fn handle_popup_delete_project(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
@@ -120,6 +154,19 @@ pub fn handle_popup_search_configs(key_event: KeyEvent, app: &mut App) {
                 code: KeyCode::Char('i'),
                 ..
             } => app.window.to_insert(),
+            _ => {}
+        },
+    }
+}
+
+pub fn handle_popup_read_todo(key_event: KeyEvent, app: &mut App) {
+    match app.window.mode {
+        /* COMMON */
+        Mode::Normal | Mode::Insert => match key_event {
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                ..
+            } => app.default_close(),
             _ => {}
         },
     }

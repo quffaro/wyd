@@ -336,6 +336,7 @@ impl App {
         // POPUP
         match self.window.popup {
             Popup::AddTodo => crate::app::ui::popup::render_popup_todo(self, frame),
+            Popup::ReadTodo => crate::app::ui::popup::render_popup_read_todo(self, frame),
             Popup::EditDesc => crate::app::ui::popup::render_popup_edit_desc(self, frame),
             Popup::SearchGitConfigs => {
                 crate::app::ui::popup::render_popup_search_config(self, frame)
@@ -343,8 +344,9 @@ impl App {
             Popup::Help => crate::app::ui::popup::render_popup_help_table(self, frame),
             Popup::NewCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
             Popup::EditCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
-            Popup::Config => crate::app::ui::popup::render_popup_wyd_confg(self, frame),
+            Popup::Config => crate::app::ui::popup::render_popup_wyd_config(self, frame),
             Popup::DeleteProject => crate::app::ui::popup::render_popup_delete_project(self, frame),
+            Popup::NewProject => crate::app::ui::popup::render_popup_new_project(self, frame),
             _ => {}
         }
     }
@@ -374,6 +376,21 @@ impl App {
         self.close_popup();
     }
     // SQL RULES
+    fn write_project(&mut self, conn: &Connection, project: Project) {
+        crate::sql::project::write_project(
+            conn, // TODO constructor
+            project,
+        );
+
+        self.projects = TableItems::<Project>::load(&conn);
+    }
+
+    pub fn write_close_new_project(&mut self, project: Project) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        self.write_project(&conn, project);
+        self.default_close();
+    }
+
     fn write_todo(&mut self, conn: &Connection) {
         let project_id = match self.projects.current() {
             Some(p) => p.id,
