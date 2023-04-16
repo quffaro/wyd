@@ -25,6 +25,7 @@ const CREATE_PROJECT_PATH: &str = "CREATE TABLE IF NOT EXISTS project_path (
     path        varchar(4000)
 );";
 const CREATE_VIEW_PROJECT: &str = "
+    DROP VIEW IF EXISTS v_project;
     CREATE VIEW v_project
     AS SELECT
     `t`.`id`          AS `id`,
