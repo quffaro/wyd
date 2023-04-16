@@ -31,6 +31,38 @@ pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> 
 
     res
 }
+
+const READ_V_PROJECT: &str =
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from v_project";
+pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
+    let mut stmt = conn.prepare(READ_PROJECT)?;
+    let res = stmt
+        .query_map([], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                name: row.get(2)?,
+                desc: match row.get(3)? {
+                    Some(x) => x,
+                    None => "N/A".to_string(),
+                },
+                category: row.get(4)?,
+                status: row.get(5)?, // TODO is this the best way?
+                is_git: row.get(6)?,
+                owner: row.get(7)?,
+                repo: row.get(8)?,
+                last_commit: match row.get(9)? {
+                    Some(x) => x,
+                    None => "N/A".to_string(),
+                },
+            })
+        })
+        .expect("A!!")
+        .collect();
+
+    res
+}
+
 /// READ PROJECTS FROM DB
 const READ_PROJECT_REPOS: &str =
     "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project where repo is not null and owner is not null";
@@ -61,6 +93,8 @@ pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::E
 
     res
 }
+
+
 /// WRITE PROJECT TO DB
 const INSERT_PROJECT: &str = "insert into project (
     path,
@@ -97,6 +131,7 @@ pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite
 
     Ok(())
 }
+
 const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
 pub fn update_project_desc(
     conn: &Connection,
@@ -155,7 +190,9 @@ pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(),
 }
 
 const DELETE_PROJECT: &str =
-    "delete from project where id = ?1; delete from todo where project_id = ?1";
+    "delete from project where id = ?1; 
+    delete from project_path where project_id = ?1;
+    delete from todo where project_id = ?1";
 pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
     conn.execute(DELETE_PROJECT, [project.id]).expect("AAA");
 

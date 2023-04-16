@@ -62,6 +62,8 @@ impl Project {
         // TODO we need to write this
         update_project_status(conn, self);
     }
+
+    
 }
 
 #[derive(Default)]
