@@ -22,7 +22,7 @@ pub fn main_ui<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {}
 
 fn wyd_to_color(color: WydColor) -> Color {
     match color {
-        WydColor::Yellow => Color::Cyan,
+        WydColor::Yellow => Color::Magenta,
         WydColor::Red => Color::Red,
         WydColor::Blue => Color::Blue,
         WydColor::Green => Color::Green,
