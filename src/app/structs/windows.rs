@@ -26,7 +26,7 @@ impl Window {
                 false => Popup::Config,
             },
             status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
+            mode: Mode::Normal,
         }
     }
     pub fn mode_color(&self) -> Color {
@@ -52,6 +52,7 @@ impl Window {
     pub fn close_popup(&mut self) {
         self.popup = Popup::None;
         self.status = WindowStatus::NotLoaded;
+        self.mode = Mode::Normal;
     }
     pub fn base_focus_color(&self) -> Color {
         match self {
@@ -68,7 +69,7 @@ impl Window {
             base: BaseWindow::Project,
             popup: Popup::None,
             status: WindowStatus::NotLoaded,
-            mode: Mode::Insert,
+            mode: Mode::Normal,
         }
     }
 }
@@ -108,12 +109,14 @@ pub enum Popup {
     None,
     SearchGitConfigs,
     AddTodo,
+    ReadTodo,
     EditCat,
     NewCat,
     EditDesc,
     Help,
     Config,
     DeleteProject,
+    NewProject,
 }
 
 impl fmt::Display for Popup {
@@ -122,12 +125,14 @@ impl fmt::Display for Popup {
             Self::None => write!(f, "NO POPUP"),
             Self::SearchGitConfigs => write!(f, "SEARCH PROJECTS"),
             Self::AddTodo => write!(f, "ADD TODO"),
+            Self::ReadTodo => write!(f, "READ TODO"),
             Self::EditCat => write!(f, "EDIT CATEGORY"),
             Self::NewCat => write!(f, "NEW CATEGORY"),
             Self::EditDesc => write!(f, "EDIT DESCRIPTION"),
             Self::Help => write!(f, "HELP"),
             Self::Config => write!(f, "CONFIG"),
             Self::DeleteProject => write!(f, "DELETE PROJECT"),
+            Self::NewProject => write!(f, "NEW PROJECT"),
         }
     }
 }

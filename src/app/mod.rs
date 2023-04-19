@@ -13,7 +13,7 @@ use crate::app::ui::{
     popup::render_popup_todo,
     render_loading,
 };
-use crate::sql::project::{update_project_desc, write_project};
+use crate::sql::project::{update_project_desc, update_project_sort, write_project};
 use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -336,6 +336,7 @@ impl App {
         // POPUP
         match self.window.popup {
             Popup::AddTodo => crate::app::ui::popup::render_popup_todo(self, frame),
+            Popup::ReadTodo => crate::app::ui::popup::render_popup_read_todo(self, frame),
             Popup::EditDesc => crate::app::ui::popup::render_popup_edit_desc(self, frame),
             Popup::SearchGitConfigs => {
                 crate::app::ui::popup::render_popup_search_config(self, frame)
@@ -343,8 +344,9 @@ impl App {
             Popup::Help => crate::app::ui::popup::render_popup_help_table(self, frame),
             Popup::NewCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
             Popup::EditCat => crate::app::ui::popup::render_popup_new_cat(self, frame),
-            Popup::Config => crate::app::ui::popup::render_popup_wyd_confg(self, frame),
+            Popup::Config => crate::app::ui::popup::render_popup_wyd_config(self, frame),
             Popup::DeleteProject => crate::app::ui::popup::render_popup_delete_project(self, frame),
+            Popup::NewProject => crate::app::ui::popup::render_popup_new_project(self, frame),
             _ => {}
         }
     }
@@ -374,6 +376,21 @@ impl App {
         self.close_popup();
     }
     // SQL RULES
+    fn write_project(&mut self, conn: &Connection, project: Project) {
+        crate::sql::project::write_project(
+            conn, // TODO constructor
+            project,
+        );
+
+        self.projects = TableItems::<Project>::load(&conn);
+    }
+
+    pub fn write_close_new_project(&mut self, project: Project) {
+        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        self.write_project(&conn, project);
+        self.default_close();
+    }
+
     fn write_todo(&mut self, conn: &Connection) {
         let project_id = match self.projects.current() {
             Some(p) => p.id,
@@ -492,5 +509,32 @@ impl App {
             .clone()
             .and_then(|c| Some(wyd_to_color(c.color.bd)))
             .unwrap()
+    }
+
+    pub fn yank(&mut self) {
+        if self.window.base == BaseWindow::Project {
+            match self.projects.current() {
+                Some(p) => {
+                    self.index = p.id as usize;
+                    self.window.to_insert()
+                }
+                None => {}
+            }
+        }
+    }
+
+    pub fn paste(&mut self) {
+        if self.window.base == BaseWindow::Project {
+            match self.projects.current() {
+                Some(p) => {
+                    let conn = Connection::open(home_path(PATH_DB)).unwrap();
+                    update_project_sort(&conn, self.index, (p.sort + 1).into());
+                    self.reload();
+                    self.index = 0;
+                    self.window.to_normal();
+                }
+                None => {}
+            }
+        }
     }
 }

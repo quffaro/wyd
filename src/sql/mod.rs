@@ -7,6 +7,7 @@ pub mod todo;
 
 const CREATE_PROJECT: &str = "CREATE TABLE IF NOT EXISTS project (
     id          integer primary key autoincrement, 
+    sort        integer,
     path        varchar(255), 
     name        varchar(255), 
     desc        varchar(4000), 
@@ -36,7 +37,8 @@ const CREATE_VIEW_PROJECT: &str = "
     `t`.`is_git`      AS `is_git`,
     `t`.`owner`       AS `owner`,
     `t`.`repo`        AS `repo`,
-    `t`.`last_commit` AS `last_commit`
+    `t`.`last_commit` AS `last_commit`,
+    `t`.`sort`        AS `sort`
     FROM project t
     LEFT JOIN project_path s
     ON `t`.`id` = `s`.`project_id`;";

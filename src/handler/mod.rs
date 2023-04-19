@@ -22,6 +22,10 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             ..
         } => popup::handle_popup_todo(key_event, app),
         Window {
+            popup: Popup::ReadTodo,
+            ..
+        } => popup::handle_popup_read_todo(key_event, app),
+        Window {
             popup: Popup::EditDesc,
             ..
         } => popup::handle_popup_desc(key_event, app),
@@ -48,6 +52,10 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             popup: Popup::DeleteProject,
             ..
         } => popup::handle_popup_delete_project(key_event, app),
+        Window {
+            popup: Popup::NewProject,
+            ..
+        } => popup::handle_popup_new_project(key_event, app),
         _ => base::handle_base(key_event, app),
     }
 

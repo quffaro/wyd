@@ -9,9 +9,13 @@ pub fn regex_repo(path: String) -> String {
 
 pub fn regex_last_dir(path: String) -> String {
     let re = Regex::new(r#".*/([^/]+)/"#).expect("AAAA");
-    let caps = re.captures(&path).unwrap();
+    match re.captures(&path) {
+        Some(caps) => caps.get(1).unwrap().as_str().to_string(),
+        None => "N/A".to_owned(),
+    }
+    // let caps = re.captures(&path).unwrap();
 
-    caps.get(1).unwrap().as_str().to_string()
+    // caps.get(1).unwrap().as_str().to_string()
 }
 pub fn find_repo(path: String) -> String {
     let result = match git2::Repository::discover(path) {

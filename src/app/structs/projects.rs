@@ -1,6 +1,7 @@
 // use crate::app::structs;
 use super::{ListNav, TableItems, TableState};
 use crate::sql::project::{read_project, update_project_status};
+use itertools::Itertools;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Connection;
 use std::{env, fmt};
@@ -8,8 +9,8 @@ use strum_macros::EnumString;
 
 #[derive(Debug, Clone)]
 pub struct Project {
-    pub id: u8,
-    pub sort_order: u8,
+    pub id: u8, // TODO default 0
+    pub sort: u8,
     pub path: String,
     pub name: String,
     pub desc: String,
@@ -22,16 +23,25 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn load(conn: &Connection) -> Vec<Project> {
-        read_project(conn).expect("READ PROJECT ERROR")
-        // vec![]
+    pub fn builder() -> ProjectBuilder {
+        ProjectBuilder::default()
     }
+    pub fn load(conn: &Connection) -> Vec<Project> {
+        let projects = read_project(conn).expect("READ PROJECT ERROR");
+
+        let sorted = projects.into_iter().sorted_by_key(|x| x.sort).collect();
+        // dbg!(&projects);
+        // projects.iter().sorted_by_key(|x| x.sort);
+        // dbg!(&projects);
+        sorted
+    }
+    // TODO
     pub fn new_in_pwd() -> Project {
         let current_dir = env::current_dir().unwrap().display().to_string();
         let name = current_dir.clone();
         Project {
             id: 0,
-            sort_order: 0,
+            sort: 0,
             path: current_dir.clone(),
             name: name,
             desc: "".to_owned(),
@@ -54,6 +64,86 @@ impl Project {
     }
 
     
+}
+
+#[derive(Default)]
+pub struct ProjectBuilder {
+    id: u8,
+    sort: u8,
+    path: String,
+    name: String,
+    desc: String,
+    category: String,
+    status: ProjectStatus,
+    is_git: bool,
+    owner: String,
+    repo: String,
+    last_commit: String,
+}
+
+impl ProjectBuilder {
+    pub fn new() -> ProjectBuilder {
+        ProjectBuilder::default()
+    }
+    pub fn id(mut self, id: u8) -> Self {
+        self.id = id;
+        self
+    }
+    pub fn sort(mut self, sort: u8) -> Self {
+        self.sort = sort;
+        self
+    }
+    pub fn path(mut self, path: String) -> Self {
+        self.path = path;
+        self
+    }
+    pub fn name(mut self, name: String) -> Self {
+        self.name = name;
+        self
+    }
+    pub fn desc(mut self, desc: String) -> Self {
+        self.desc = "NA".to_string();
+        self
+    }
+    pub fn category(mut self, category: String) -> Self {
+        self.category = category;
+        self
+    }
+    pub fn status(mut self, status: ProjectStatus) -> Self {
+        self.status = status;
+        self
+    }
+    pub fn is_git(mut self, is_git: bool) -> Self {
+        self.is_git = is_git;
+        self
+    }
+    pub fn owner(mut self, owner: String) -> Self {
+        self.owner = owner;
+        self
+    }
+    pub fn repo(mut self, repo: String) -> Self {
+        self.repo = repo;
+        self
+    }
+    pub fn last_commit(mut self, last_commit: String) -> Self {
+        self.last_commit = last_commit;
+        self
+    }
+    pub fn build(self) -> Project {
+        Project {
+            id: self.id, // TODO default
+            sort: self.sort,
+            path: self.path,
+            name: self.name,
+            desc: self.desc,
+            category: self.category,
+            status: self.status,
+            is_git: self.is_git,
+            owner: self.owner,
+            repo: self.repo,
+            last_commit: self.last_commit,
+        }
+    }
 }
 
 impl TableItems<Project> {
@@ -95,8 +185,9 @@ impl TableItems<Project> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, EnumString)]
+#[derive(Default, PartialEq, Eq, Debug, Clone, EnumString)]
 pub enum ProjectStatus {
+    #[default]
     Stable,
     Unstable,
 }
