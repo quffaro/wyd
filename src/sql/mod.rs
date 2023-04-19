@@ -37,7 +37,8 @@ const CREATE_VIEW_PROJECT: &str = "
     `t`.`is_git`      AS `is_git`,
     `t`.`owner`       AS `owner`,
     `t`.`repo`        AS `repo`,
-    `t`.`last_commit` AS `last_commit`
+    `t`.`last_commit` AS `last_commit`,
+    `t`.`sort`        AS `sort`
     FROM project t
     LEFT JOIN project_path s
     ON `t`.`id` = `s`.`project_id`;";

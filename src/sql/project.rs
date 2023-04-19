@@ -33,7 +33,7 @@ pub fn read_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> 
 }
 
 const READ_V_PROJECT: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit from v_project";
+    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from v_project";
 pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
@@ -55,6 +55,7 @@ pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error
                     Some(x) => x,
                     None => "N/A".to_string(),
                 },
+                sort: row.get(10)?,
             })
         })
         .expect("A!!")
@@ -93,7 +94,6 @@ pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::E
 
     res
 }
-
 
 /// WRITE PROJECT TO DB
 const INSERT_PROJECT: &str = "insert into project (
@@ -189,8 +189,7 @@ pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(),
     Ok(())
 }
 
-const DELETE_PROJECT: &str =
-    "delete from project where id = ?1; 
+const DELETE_PROJECT: &str = "delete from project where id = ?1; 
     delete from project_path where project_id = ?1;
     delete from todo where project_id = ?1";
 pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
