@@ -23,6 +23,7 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 KeyCode::Char('l') | KeyCode::Up => app.previous(),
                 KeyCode::Char('k') | KeyCode::Down => app.next(),
                 // Other handlers you could add here.
+                KeyCode::Char('/') => app.to_search(),
                 KeyCode::Enter | KeyCode::Char('x') => app.toggle(),
                 KeyCode::Char('A') => app.add_project_in_dir(true),
                 KeyCode::Char('y') => app.yank(),

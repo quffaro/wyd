@@ -69,7 +69,7 @@ pub fn write_tmp_to_project(conn: &Connection) -> Result<(), rusqlite::Error> {
                 .category("Unknown".to_owned())
                 .status(ProjectStatus::Unstable)
                 .is_git(true)
-                .owner(guess_git_owner(row.get(0)?))
+                .owner(guess_git_owner(row.get(0)?).unwrap())
                 .repo(regex_last_dir(row.get(0)?))
                 .last_commit("N/A".to_owned())
                 .build();

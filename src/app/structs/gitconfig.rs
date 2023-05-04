@@ -44,19 +44,18 @@ impl TableItems<GitConfig> {
 pub fn read_git_config(path: String) -> Option<String> {
     let config_path = format!("{}{}", path, GITCONFIG_SUFFIX).to_owned();
     // dbg!(&config_path);
-    let config = Ini::load_from_file(config_path).expect(path.as_str());
-    // TODO breaks if no gitconfig
-    let url = config
-        .get_from(Some("remote \"origin\""), "url")
-        .and_then(|x| Some(x.to_owned()));
-
-    url
+    match Ini::load_from_file(config_path) {
+        Ok(conf) => conf
+            .get_from(Some("remote \"origin\""), "url")
+            .and_then(|x| Some(x.to_owned())),
+        Err(e) => None,
+    }
 }
 
-pub fn guess_git_owner(path: String) -> String {
+pub fn guess_git_owner(path: String) -> Option<String> {
     match read_git_config(path) {
-        Some(url) => regex_last_dir(url),
-        None => "N/A".to_owned(),
+        Some(url) => Some(regex_last_dir(url)),
+        None => None,
     }
 }
 
