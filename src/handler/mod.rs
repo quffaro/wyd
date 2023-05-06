@@ -21,7 +21,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             base: BaseWindow::Search,
             popup: Popup::None,
             ..
-        } => {}
+        } => base::handle_search(key_event, app),
         Window {
             popup: Popup::AddTodo,
             ..

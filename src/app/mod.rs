@@ -309,7 +309,7 @@ impl App {
         // CHUNK 0
         let top_chunk = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .constraints([Constraint::Percentage(75), Constraint::Percentage(25)].as_ref())
             .split(chunks[0]);
 
         let (search, title) = render_title_and_search(&self);

@@ -69,6 +69,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         .projects
         .items
         .iter()
+        // .filter(|s| s.name.contains(app.input.value()))
         .map(|p| {
             Row::new(vec![
                 Cell::from(
