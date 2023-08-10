@@ -9,7 +9,9 @@ use self::structs::{
     FilteredListItems, ListNav, PlainListItems, TableItems,
 };
 use crate::app::ui::{
-    base::{render_projects, render_title, render_todo, render_todo_and_desc},
+    base::{
+        render_projects, render_title, render_title_and_search, render_todo, render_todo_and_desc,
+    },
     popup::render_popup_todo,
     render_loading,
 };
@@ -151,10 +153,6 @@ impl App {
     /// Handles the tick event of the terminal.
     pub fn tick(&mut self) {
         self.tick = (self.tick + 1) % 5;
-        // self.tick = match self.tick.checked_add(1).map(|i| i % 5) {
-        //     Some(y) => y,
-        //     None => 0,
-        // }
     }
 
     pub fn next(&mut self) {
@@ -236,6 +234,7 @@ impl App {
             BaseWindow::Project => BaseWindow::Todo,
             BaseWindow::Todo => BaseWindow::Description,
             BaseWindow::Description => BaseWindow::Project,
+            BaseWindow::Search => BaseWindow::Project,
         }
     }
     pub fn cycle_focus_previous(&mut self) {
@@ -243,6 +242,7 @@ impl App {
             BaseWindow::Project => BaseWindow::Description,
             BaseWindow::Todo => BaseWindow::Project,
             BaseWindow::Description => BaseWindow::Todo,
+            BaseWindow::Search => BaseWindow::Project,
         }
     }
     pub fn default_select(&mut self) {
@@ -290,10 +290,6 @@ impl App {
 
     /// Renders the user interface widgets.
     pub fn render<B: Backend>(&mut self, frame: &mut Frame<'_, B>) {
-        // This is where you add new widgets.
-        // See the following resources:
-        // - https://docs.rs/tui/latest/tui/widgets/index.html
-        // - https://github.com/fdehau/tui-rs/tree/master/examples
         let size = frame.size();
 
         // Vertical layout
@@ -311,8 +307,15 @@ impl App {
             .split(size);
 
         // CHUNK 0
-        let title = render_title(&self);
-        frame.render_widget(title, chunks[0]);
+        let top_chunk = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(75), Constraint::Percentage(25)].as_ref())
+            .split(chunks[0]);
+
+        let (search, title) = render_title_and_search(&self);
+        // let title = render_title(&self);
+        frame.render_widget(title, top_chunk[0]);
+        frame.render_widget(search, top_chunk[1]);
 
         // CHUNK 1
         let projects = render_projects(&self);
@@ -354,10 +357,16 @@ impl App {
     /// TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
         let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        // TODO i want a rule which handles whether this operation will be performed before calling
+        // a SQL rule. SQL rules should only be called when a write is certain
         crate::sql::project::add_project_in_dir(is_find_git, &conn);
-        self.projects = TableItems::<Project>::load(&conn);
+        self.reload();
+        // self.projects = TableItems::<Project>::load(&conn);
     }
 
+    pub fn to_search(&mut self) {
+        self.window.to_search()
+    }
     // POPUP RULES
     pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
         self.is_popup_loading = true;

@@ -1,5 +1,5 @@
 // use std::thread::__FastLocalKeyInner;
-use crate::app::structs::windows::{Popup, Window};
+use crate::app::structs::windows::{BaseWindow, Popup, Window};
 use crate::app::{App, AppResult};
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 
@@ -17,6 +17,11 @@ pub fn handle_mouse_events(mouse_event: MouseEvent, app: &mut App) -> AppResult<
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match app.window {
+        Window {
+            base: BaseWindow::Search,
+            popup: Popup::None,
+            ..
+        } => base::handle_search(key_event, app),
         Window {
             popup: Popup::AddTodo,
             ..

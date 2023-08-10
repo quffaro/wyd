@@ -15,6 +15,41 @@ use ratatui::widgets::{
 };
 use std::env;
 
+pub fn render_title_and_search<'a>(app: &App) -> (Paragraph, Paragraph) {
+    let left = render_search(app);
+
+    let right = render_title(app);
+
+    (left, right)
+}
+
+pub fn render_search<'a>(app: &App) -> Paragraph {
+    let search = match app.window.base {
+        BaseWindow::Search => app.input.value(),
+        _ => "",
+    };
+    Paragraph::new(search)
+        .block(
+            Block::default()
+                .title("(search)")
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL), // .border_type(BorderType::Rounded),
+        )
+        .style(
+            Style::default()
+                .fg(
+                    if app.window.base == BaseWindow::Search && app.window.popup == Popup::None {
+                        Color::Yellow
+                    } else {
+                        Color::White
+                    },
+                )
+                .bg(Color::Black)
+                .add_modifier(Modifier::ITALIC),
+        )
+        .alignment(Alignment::Left)
+}
+
 pub fn render_title<'a>(app: &App) -> Paragraph {
     let path = env::current_dir().unwrap().display().to_string();
     Paragraph::new(path)
@@ -34,6 +69,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         .projects
         .items
         .iter()
+        // .filter(|s| s.name.contains(app.input.value()))
         .map(|p| {
             Row::new(vec![
                 Cell::from(

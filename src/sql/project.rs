@@ -211,20 +211,22 @@ pub fn add_project_in_dir(is_find_git: bool, conn: &Connection) {
         .repo("".to_owned()) // TODO default)
         .last_commit("".to_owned());
     if is_find_git {
-        let repo = match git2::Repository::discover(copy) {
-            Ok(r) => r.workdir().unwrap().to_str().unwrap().to_string(),
-            _ => "N/A".to_string(),
-        };
-        write_project(
-            conn,
-            project_build
-                .owner(crate::app::structs::gitconfig::guess_git_owner(
-                    repo.clone(),
-                ))
-                .name(crate::app::regex::regex_last_dir(repo.clone()))
-                .repo(crate::app::regex::regex_last_dir(repo.clone()))
-                .build(),
-        );
+        match git2::Repository::discover(copy) {
+            Ok(r) => {
+                let repo = r.workdir().unwrap().to_str().unwrap().to_string();
+                write_project(
+                    conn,
+                    project_build
+                        .owner(
+                            crate::app::structs::gitconfig::guess_git_owner(repo.clone()).unwrap(),
+                        )
+                        .name(crate::app::regex::regex_last_dir(repo.clone()))
+                        .repo(crate::app::regex::regex_last_dir(repo.clone()))
+                        .build(),
+                );
+            }
+            Err(_) => (), // TODO log that nothing happened here
+        }
     } else {
         write_project(conn, project_build.build());
     }

@@ -41,6 +41,10 @@ impl Window {
     pub fn to_insert(&mut self) {
         self.mode = Mode::Insert
     }
+
+    pub fn to_search(&mut self) {
+        self.base = BaseWindow::Search
+    }
     /// WINDOW RULES
     pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
         self.popup = popup;
@@ -76,6 +80,7 @@ impl Window {
 
 #[derive(Debug, PartialEq, Eq, Clone, EnumString, EnumIter)]
 pub enum BaseWindow {
+    Search,
     Project,
     Todo,
     Description,
@@ -84,6 +89,7 @@ pub enum BaseWindow {
 impl fmt::Display for BaseWindow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
+            Self::Search => write!(f, "SEARCH"),
             Self::Project => write!(f, "PROJECTS"),
             Self::Todo => write!(f, "TODO"),
             Self::Description => write!(f, "DESC"),

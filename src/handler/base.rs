@@ -2,7 +2,37 @@ use crate::app::{
     structs::windows::{BaseWindow, Mode, Popup},
     App,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use tui_input::backend::crossterm::EventHandler;
+
+pub fn handle_search(key_event: KeyEvent, app: &mut App) {
+    match key_event {
+        KeyEvent {
+            code: KeyCode::Esc | KeyCode::Char('q'),
+            ..
+        } => {
+            app.running = false;
+        }
+        KeyEvent {
+            code: KeyCode::Char('c') | KeyCode::Char('C'),
+            modifiers: KeyModifiers::CONTROL,
+            ..
+        } => {
+            app.running = false;
+        }
+        KeyEvent {
+            code: KeyCode::Right,
+            ..
+        } => app.cycle_focus_next(),
+        KeyEvent {
+            code: KeyCode::Left,
+            ..
+        } => app.cycle_focus_previous(),
+        event => {
+            app.input.handle_event(&Event::Key(event));
+        }
+    }
+}
 
 pub fn handle_base(key_event: KeyEvent, app: &mut App) {
     match app.window.mode {
@@ -20,9 +50,17 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 }
                 KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
                 KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
+                KeyCode::Tab => {
+                    if key_event.modifiers == KeyModifiers::SHIFT {
+                        app.cycle_focus_previous()
+                    } else {
+                        app.cycle_focus_next()
+                    }
+                }
                 KeyCode::Char('l') | KeyCode::Up => app.previous(),
                 KeyCode::Char('k') | KeyCode::Down => app.next(),
                 // Other handlers you could add here.
+                KeyCode::Char('/') => app.to_search(),
                 KeyCode::Enter | KeyCode::Char('x') => app.toggle(),
                 KeyCode::Char('A') => app.add_project_in_dir(true),
                 KeyCode::Char('y') => app.yank(),
