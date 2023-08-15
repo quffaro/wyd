@@ -5,6 +5,7 @@ use crate::{CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, GLOB_GITCONFIG_SUFFIX};
 use glob::glob;
 use ini::Ini;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -14,26 +15,26 @@ pub struct GitConfig {
 }
 
 impl GitConfig {
-    pub fn load(conn: &Connection) -> Vec<GitConfig> {
+    pub fn load() -> Vec<GitConfig> {
         // TODO unwrap
-        read_tmp(conn).unwrap()
+        read_tmp().unwrap()
         // vec![]
     }
 }
 
 impl TableItems<GitConfig> {
-    pub fn load(conn: &Connection) -> TableItems<GitConfig> {
+    pub fn load() -> TableItems<GitConfig> {
         TableItems {
-            items: GitConfig::load(conn),
+            items: GitConfig::load(),
             state: TableState::default(),
         }
     }
-    pub fn toggle(&mut self, conn: &Connection) {
+    pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
-                update_tmp(conn, &self.items[i]); // TODO
+                update_tmp(&self.items[i]); // TODO
             } else {
                 continue;
             }

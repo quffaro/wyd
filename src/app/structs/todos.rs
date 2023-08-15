@@ -1,8 +1,9 @@
 use super::{FilteredListItems, ListNav, ListState, TableState};
-use crate::sql::todo::read_todo;
+use crate::json::todo::read_todo;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Todo {
     pub id: u8,
     pub parent_id: u8,
@@ -13,10 +14,10 @@ pub struct Todo {
 }
 
 impl FilteredListItems<Todo> {
-    pub fn load(conn: &Connection) -> FilteredListItems<Todo> {
+    pub fn load() -> FilteredListItems<Todo> {
         // TODO replace by Self?
         FilteredListItems {
-            items: read_todo(conn).expect("AA"),
+            items: read_todo().expect("AA"),
             filtered: vec![],
             state: TableState::default(),
         }
@@ -39,12 +40,12 @@ impl FilteredListItems<Todo> {
             .sort_by(|a, b| a.is_complete.cmp(&b.is_complete))
     }
     // TODO can this be a method for ListNavigate?
-    pub fn toggle(&mut self, conn: &Connection) {
+    pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.filtered.len() {
             if i == selected {
                 self.filtered[i].is_complete = !self.filtered[i].is_complete;
-                crate::sql::todo::update_todo(conn, &self.filtered[i]).expect("msg");
+                crate::sql::todo::update_todo(&self.filtered[i]).expect("msg");
             } else {
                 continue;
             }

@@ -1,13 +1,12 @@
 // use crate::app::structs;
 use super::{ListNav, TableItems, TableState};
-use crate::sql::project::{read_project, update_project_status};
+use crate::json::project::{read_project, update_project_status};
 use itertools::Itertools;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
-use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::{env, fmt};
 use strum_macros::EnumString;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Project {
     pub id: u8, // TODO default 0
     pub sort: u8,
@@ -20,20 +19,17 @@ pub struct Project {
     pub owner: String,
     pub repo: String,
     pub last_commit: String,
+    pub todos: Vec<Todo>,
 }
 
 impl Project {
     pub fn builder() -> ProjectBuilder {
         ProjectBuilder::default()
     }
-    pub fn load(conn: &Connection) -> Vec<Project> {
-        let projects = read_project(conn).expect("READ PROJECT ERROR");
+    pub fn load() -> Vec<Project> {
+        let projects = read_project().expect("READ PROJECT ERROR");
 
-        let sorted = projects.into_iter().sorted_by_key(|x| x.sort).collect();
-        // dbg!(&projects);
-        // projects.iter().sorted_by_key(|x| x.sort);
-        // dbg!(&projects);
-        sorted
+        projects.into_iter().sorted_by_key(|x| x.sort).collect();
     }
     // TODO
     pub fn new_in_pwd() -> Project {
@@ -51,19 +47,18 @@ impl Project {
             owner: "".to_owned(), //TODO
             repo: current_dir.clone(),
             last_commit: "N/A".to_owned(),
+            todos: [],
         }
     }
     // TODO this is
-    pub fn cycle_status(&mut self, conn: &Connection) {
+    pub fn cycle_status(&mut self) {
         self.status = match self.status {
             ProjectStatus::Stable => ProjectStatus::Unstable,
             ProjectStatus::Unstable => ProjectStatus::Stable,
         };
         // TODO we need to write this
-        update_project_status(conn, self);
+        update_project_status(self);
     }
-
-    
 }
 
 #[derive(Default)]
@@ -79,6 +74,7 @@ pub struct ProjectBuilder {
     owner: String,
     repo: String,
     last_commit: String,
+    todos: [],
 }
 
 impl ProjectBuilder {
@@ -129,6 +125,10 @@ impl ProjectBuilder {
         self.last_commit = last_commit;
         self
     }
+    pub fn todos(mut self, todos: Vec<Todo>) -> Self {
+        self.todos = todos;
+        self
+    }
     pub fn build(self) -> Project {
         Project {
             id: self.id, // TODO default
@@ -142,14 +142,15 @@ impl ProjectBuilder {
             owner: self.owner,
             repo: self.repo,
             last_commit: self.last_commit,
+            todos: self.todos,
         }
     }
 }
 
 impl TableItems<Project> {
-    pub fn load(conn: &Connection) -> TableItems<Project> {
+    pub fn load() -> TableItems<Project> {
         TableItems {
-            items: Project::load(conn),
+            items: Project::load(),
             state: TableState::default(),
         }
     }
@@ -173,11 +174,11 @@ impl TableItems<Project> {
             None => (None, None),
         }
     }
-    pub fn toggle(&mut self, conn: &Connection) {
+    pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                self.items[i].cycle_status(conn);
+                self.items[i].cycle_status();
             } else {
                 continue;
             }
@@ -197,12 +198,14 @@ impl fmt::Display for ProjectStatus {
         write!(f, "{:?}", self)
     }
 }
+
 // TODO refactor to include-sql
-impl FromSql for ProjectStatus {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value
-            .as_str()?
-            .parse::<ProjectStatus>()
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
+// TODO remove FromSql
+// impl FromSql for ProjectStatus {
+//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+//         value
+//             .as_str()?
+//             .parse::<ProjectStatus>()
+//             .map_err(|e| FromSqlError::Other(Box::new(e)))
+//     }
+// }

@@ -5,8 +5,9 @@ use crate::{
 };
 use rusqlite::Connection;
 use std::fmt;
+use serde::{Serialize, Deserialize}
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct Category {
     pub id: u8,
     pub name: String,
@@ -19,24 +20,15 @@ impl fmt::Display for Category {
 }
 
 impl Category {
-    pub fn load(conn: &Connection) -> Vec<Category> {
-        read_category(conn).expect("READ CATEGORY ERROR")
+    pub fn load() -> Vec<Category> {
+        read_category().expect("READ CATEGORY ERROR")
     }
 }
 
-// impl FromSql for Category {
-//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-//         value
-//             .as_str()?
-//             .parse::<String>()
-//             .map_err(|e| FromSqlError::Other(Box::new(e)))
-//     }
-// }
-
 impl PlainListItems<Category> {
-    pub fn load(conn: &Connection) -> PlainListItems<Category> {
+    pub fn load() -> PlainListItems<Category> {
         PlainListItems {
-            items: Category::load(conn),
+            items: Category::load(),
             state: ListState::default(),
         }
     }
@@ -47,11 +39,11 @@ impl PlainListItems<Category> {
             None => None,
         }
     }
-    pub fn toggle(&mut self, conn: &Connection, project: &Project) {
+    pub fn toggle(&mut self, project: &Project) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                update_project_category(conn, project, &self.items[i].name); // TODO not the best!
+                update_project_category(project, &self.items[i].name); // TODO not the best!
             } else {
                 continue;
             }
