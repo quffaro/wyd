@@ -2,7 +2,6 @@ use crate::app::structs::projects::{Project, ProjectBuilder};
 use std::env;
 
 pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
-    let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
         .query_map([], |row| {
             let project: Project = ProjectBuilder::new()
@@ -30,7 +29,6 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
 }
 
 pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
-    let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
         .query_map([], |row| {
             Ok(Project {
@@ -61,7 +59,6 @@ pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error
 
 /// READ PROJECTS FROM DB
 pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
-    let mut stmt = conn.prepare(READ_PROJECT_REPOS)?;
     let res = stmt
         .query_map([], |row| {
             let project: Project = ProjectBuilder::new()
@@ -90,7 +87,6 @@ pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::E
 
 /// WRITE PROJECT TO DB
 pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite::Error> {
-    let mut stmt = conn.prepare(INSERT_PROJECT)?;
     stmt.execute(params![
         project.path,
         project.name,

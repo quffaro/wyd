@@ -27,6 +27,11 @@ pub mod regex;
 pub mod structs;
 pub mod ui;
 
+pub struct JsonDB {
+    pub categories: Vec<Category>,
+    pub projects: Vec<Project>,
+}
+
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -44,9 +49,7 @@ pub struct App {
     pub window: Window,
     pub jobs: JobRoster,
     pub projects: TableItems<Project>,
-    pub todos: FilteredListItems<Todo>,
     pub configs: TableItems<GitConfig>,
-    pub categories: PlainListItems<Category>,
 }
 
 impl Default for App {
@@ -63,10 +66,7 @@ impl Default for App {
                 window: Window::load(true),
                 jobs: JobRoster::new(),
                 projects: TableItems::<Project>::default(),
-                todos: FilteredListItems::<Todo>::default(),
                 configs: TableItems::<GitConfig>::default(),
-                categories: PlainListItems::<Category>::default(),
-                // desc: "".to_owned(),
             },
             None => App {
                 running: true,
@@ -79,10 +79,7 @@ impl Default for App {
                 window: Window::load(false),
                 jobs: JobRoster::new(),
                 projects: TableItems::<Project>::default(),
-                todos: FilteredListItems::<Todo>::default(),
                 configs: TableItems::<GitConfig>::default(),
-                categories: PlainListItems::<Category>::default(),
-                // desc: "".to_owned(),
             },
         }
     }
@@ -108,9 +105,7 @@ impl App {
                 window: Window::load(true),
                 jobs: JobRoster::new(),
                 projects: TableItems::<Project>::load(),
-                todos: FilteredListItems::<Todo>::load(),
                 configs: TableItems::<GitConfig>::load(),
-                categories: PlainListItems::<Category>::load(),
             },
             None => Self {
                 running: true,
@@ -123,9 +118,7 @@ impl App {
                 window: Window::load(false),
                 jobs: JobRoster::new(),
                 projects: TableItems::<Project>::load(),
-                todos: FilteredListItems::<Todo>::load(),
                 configs: TableItems::<GitConfig>::load(),
-                categories: PlainListItems::<Category>::load(),
             },
         }
     }
@@ -157,24 +150,12 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Project,
                 ..
-            } => {
-                self.projects.next();
-                // TODO move to update
-                match self.projects.current() {
-                    Some(p) => {
-                        let items = self.todos.items.clone();
-                        self.todos.filtered =
-                            items.into_iter().filter(|t| t.project_id == p.id).collect();
-                        self.todos.select_state(Some(0));
-                    }
-                    None => {}
-                }
-            }
+            } => self.projects.next(),
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.todos.next(),
+            } => self.projects.next_substate(),
             Window {
                 popup: Popup::SearchGitConfigs,
                 base: _,
@@ -194,24 +175,12 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Project,
                 ..
-            } => {
-                self.projects.previous();
-                // TODO move to update
-                match self.projects.current() {
-                    Some(p) => {
-                        let items = self.todos.items.clone();
-                        self.todos.filtered =
-                            items.into_iter().filter(|t| t.project_id == p.id).collect();
-                        self.todos.select_state(Some(0));
-                    }
-                    None => {}
-                }
-            }
+            } => self.projects.previous(),
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.todos.previous(),
+            } => self.projects.previous_substate(),
             Window {
                 popup: Popup::SearchGitConfigs,
                 base: _,
@@ -247,10 +216,10 @@ impl App {
         self.configs.state.select(Some(0));
         self.categories.state.select(Some(0));
 
-        match self.projects.current() {
-            Some(p) => self.todos.select_filter_state(Some(0), p.id),
-            None => (),
-        }
+        // match self.projects.current() {
+        //     Some(p) => self.todos.select_filter_state(Some(0), p.id),
+        //     None => (),
+        // }
     }
 
     pub fn toggle(&mut self) {
@@ -264,7 +233,7 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.todos.toggle(),
+            } => self.projects.toggle_todo(),
             Window {
                 popup: Popup::SearchGitConfigs,
                 base: _,
@@ -377,7 +346,8 @@ impl App {
         self.default_input();
         self.close_popup();
     }
-    // SQL RULES
+    /// JSON RULES
+    /// adds
     fn write_project(&mut self, project: Project) {
         crate::json::project::write_project(project);
 
@@ -390,24 +360,28 @@ impl App {
     }
 
     fn write_todo(&mut self) {
-        let project_id = match self.projects.current() {
-            Some(p) => p.id,
-            None => 0,
-        };
+        let project_id = self
+            .projects
+            .current()
+            .and_then(|p| Some(p.id))
+            .or_else(|| Some(0));
+
         crate::json::todo::write_new_todo(
             // TODO constructor
             vec![Todo {
                 id: 0,
                 parent_id: 0,
-                project_id: project_id,
+                project_id: project_id.unwrap(),
                 todo: self.input.value().to_owned(),
                 is_complete: false,
                 priority: 1,
             }],
         );
 
-        self.todos = FilteredListItems::<Todo>::load();
-        self.todos.select_filter_state(Some(0), project_id);
+        /// RELOAD
+        self.reload();
+        // self.todos = FilteredListItems::<Todo>::load();
+        // self.todos.select_filter_state(Some(0), project_id);
     }
 
     fn update_project_desc(&mut self) {
@@ -447,7 +421,6 @@ impl App {
                 // TODO needs to work if above write is successful
                 crate::json::project::update_project_category(p, &value);
                 // reload
-                self.categories = PlainListItems::<Category>::load();
                 self.projects = TableItems::<Project>::load();
                 self.projects.select_state(i);
             }
@@ -462,7 +435,6 @@ impl App {
             (i, Some(p)) => {
                 let category = self.categories.current().unwrap().name.to_string();
                 crate::json::project::update_project_category(p, &category);
-                self.categories = PlainListItems::<Category>::load();
                 self.projects = TableItems::<Project>::load();
                 self.projects.select_state(i);
             }
@@ -473,15 +445,11 @@ impl App {
 
     pub fn cycle_priority(&mut self) {
         //TODO delete
-        match self.todos.current_state() {
+        match self.projects.current_todo_state() {
             (idx, Some(t)) => {
                 let priority = (t.priority + 1) % 3;
                 crate::json::todo::update_todo_priority(t.id, priority);
                 // TODO
-                // self.todos = FilteredListItems::<Todo>::load(&conn);
-                // self.todos.filter_from_projects(t.project_id.clone());
-                // self.todos.select_state(idx);
-                // self.todos.select_state(idx);
             }
             _ => (),
         }
@@ -493,7 +461,6 @@ impl App {
             Some(p) => {
                 crate::json::project::delete_project(p);
                 self.projects = TableItems::<Project>::load();
-                self.todos = FilteredListItems::<Todo>::load();
                 self.default_close();
             }
             _ => (),

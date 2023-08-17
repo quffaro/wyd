@@ -153,6 +153,7 @@ impl TableItems<Project> {
         TableItems {
             items: Project::load(),
             state: TableState::default(),
+            substate: ListState::default(),
         }
     }
     // pub fn reload(mut self, conn: Option<Connection>, idx: Option<u8>) {
