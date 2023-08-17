@@ -134,9 +134,10 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
 
 pub fn render_todo<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
-        .todos
-        .filtered
+        .projects
+        .current_todos()
         .iter()
+        .flatten()
         .map(|t| {
             Row::new(vec![
                 Cell::from(match t.is_complete {
@@ -206,9 +207,10 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .border_type(BorderType::Plain);
 
     let todo_items: Vec<ListItem> = app
-        .todos
-        .filtered
+        .projects
+        .current_todos()
         .iter()
+        .flatten()
         .map(|t| {
             if t.is_complete {
                 ListItem::new(format!("[x] {}", t.todo.clone()))

@@ -1,10 +1,9 @@
 use super::super::regex::regex_last_dir;
 use super::{TableItems, TableState};
-use crate::sql::tmp_config::{read_tmp, update_tmp};
+use crate::json::tmp_config::{read_tmp, update_tmp};
 use crate::{CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, GLOB_GITCONFIG_SUFFIX};
 use glob::glob;
 use ini::Ini;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

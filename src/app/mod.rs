@@ -15,12 +15,11 @@ use crate::app::ui::{
     popup::render_popup_todo,
     render_loading,
 };
-use crate::sql::project::{update_project_desc, update_project_sort, write_project};
+use crate::json::project::{update_project_desc, update_project_sort, write_project};
 use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::terminal::Frame;
-use rusqlite::Connection;
 use std::error;
 use tui_input::Input;
 
@@ -97,7 +96,6 @@ impl App {
 
     /// Loads data into the app
     pub fn load() -> Self {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
         match load_config() {
             Some(c) => Self {
                 running: true,
@@ -109,10 +107,10 @@ impl App {
                 config: Some(c),
                 window: Window::load(true),
                 jobs: JobRoster::new(),
-                projects: TableItems::<Project>::load(&conn),
-                todos: FilteredListItems::<Todo>::load(&conn),
-                configs: TableItems::<GitConfig>::load(&conn),
-                categories: PlainListItems::<Category>::load(&conn),
+                projects: TableItems::<Project>::load(),
+                todos: FilteredListItems::<Todo>::load(),
+                configs: TableItems::<GitConfig>::load(),
+                categories: PlainListItems::<Category>::load(),
             },
             None => Self {
                 running: true,
@@ -124,21 +122,19 @@ impl App {
                 config: None,
                 window: Window::load(false),
                 jobs: JobRoster::new(),
-                projects: TableItems::<Project>::load(&conn),
-                todos: FilteredListItems::<Todo>::load(&conn),
-                configs: TableItems::<GitConfig>::load(&conn),
-                categories: PlainListItems::<Category>::load(&conn),
+                projects: TableItems::<Project>::load(),
+                todos: FilteredListItems::<Todo>::load(),
+                configs: TableItems::<GitConfig>::load(),
+                categories: PlainListItems::<Category>::load(),
             },
         }
     }
 
     pub fn reload(&mut self) {
         // TODO should retain selection...
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
-
         match self.projects.get_state_selected() {
             Some(idx) => {
-                self.projects = TableItems::<Project>::load(&conn);
+                self.projects = TableItems::<Project>::load();
                 self.projects.select_state(Some(idx));
             }
             _ => (),
@@ -257,31 +253,29 @@ impl App {
         }
     }
 
-    // toggle
     pub fn toggle(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
         match self.window {
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Project,
                 ..
-            } => self.projects.toggle(&conn),
+            } => self.projects.toggle(),
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.todos.toggle(&conn),
+            } => self.todos.toggle(),
             Window {
                 popup: Popup::SearchGitConfigs,
                 base: _,
                 ..
-            } => self.configs.toggle(&conn),
+            } => self.configs.toggle(),
             Window {
                 popup: Popup::EditCat,
                 base: _,
                 ..
             } => match self.projects.current() {
-                Some(p) => self.categories.toggle(&conn, p),
+                Some(p) => self.categories.toggle(p),
                 None => {}
             },
             _ => {}
@@ -356,10 +350,9 @@ impl App {
 
     /// TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
         // TODO i want a rule which handles whether this operation will be performed before calling
         // a SQL rule. SQL rules should only be called when a write is certain
-        crate::sql::project::add_project_in_dir(is_find_git, &conn);
+        crate::json::project::add_project_in_dir(is_find_git);
         self.reload();
         // self.projects = TableItems::<Project>::load(&conn);
     }
@@ -385,28 +378,23 @@ impl App {
         self.close_popup();
     }
     // SQL RULES
-    fn write_project(&mut self, conn: &Connection, project: Project) {
-        crate::sql::project::write_project(
-            conn, // TODO constructor
-            project,
-        );
+    fn write_project(&mut self, project: Project) {
+        crate::json::project::write_project(project);
 
-        self.projects = TableItems::<Project>::load(&conn);
+        self.projects = TableItems::<Project>::load();
     }
 
     pub fn write_close_new_project(&mut self, project: Project) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        self.write_project(&conn, project);
+        self.write_project(project);
         self.default_close();
     }
 
-    fn write_todo(&mut self, conn: &Connection) {
+    fn write_todo(&mut self) {
         let project_id = match self.projects.current() {
             Some(p) => p.id,
             None => 0,
         };
-        crate::sql::todo::write_new_todo(
-            conn,
+        crate::json::todo::write_new_todo(
             // TODO constructor
             vec![Todo {
                 id: 0,
@@ -418,14 +406,14 @@ impl App {
             }],
         );
 
-        self.todos = FilteredListItems::<Todo>::load(conn);
+        self.todos = FilteredListItems::<Todo>::load();
         self.todos.select_filter_state(Some(0), project_id);
     }
 
-    fn update_project_desc(&mut self, conn: &Connection) {
+    fn update_project_desc(&mut self) {
         match self.projects.current_state() {
             (i, Some(p)) => {
-                crate::sql::project::update_project_desc(conn, p.id, self.input.value().to_owned());
+                crate::json::project::update_project_desc(p.id, self.input.value().to_owned());
                 self.reload();
                 self.projects.select_state(i);
             }
@@ -434,35 +422,33 @@ impl App {
     }
 
     pub fn write_close_new_todo(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        self.write_todo(&conn);
+        self.write_todo();
         self.default_close();
     }
 
     pub fn write_close_description(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        self.update_project_desc(&conn);
+        self.update_project_desc();
         self.default_close();
     }
 
     pub fn write_close_gitconfig(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
-        crate::sql::tmp_config::write_tmp_to_project(&conn);
-        self.projects = TableItems::<Project>::load(&conn);
+        crate::json::tmp_config::write_tmp_to_project();
+        self.projects = TableItems::<Project>::load();
         self.default_close();
     }
 
     pub fn write_close_new_category(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        // TODO delete
+
         match self.projects.current_state() {
             (i, Some(p)) => {
                 let value = self.input.value().to_owned();
-                crate::sql::category::write_category(&conn, &value);
+                crate::json::category::write_category(&value);
                 // TODO needs to work if above write is successful
-                crate::sql::project::update_project_category(&conn, p, &value);
+                crate::json::project::update_project_category(p, &value);
                 // reload
-                self.categories = PlainListItems::<Category>::load(&conn);
-                self.projects = TableItems::<Project>::load(&conn);
+                self.categories = PlainListItems::<Category>::load();
+                self.projects = TableItems::<Project>::load();
                 self.projects.select_state(i);
             }
             _ => {}
@@ -471,13 +457,13 @@ impl App {
     }
 
     pub fn write_close_edit_category(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        // TODO delete
         match self.projects.current_state() {
             (i, Some(p)) => {
                 let category = self.categories.current().unwrap().name.to_string();
-                crate::sql::project::update_project_category(&conn, p, &category);
-                self.categories = PlainListItems::<Category>::load(&conn);
-                self.projects = TableItems::<Project>::load(&conn);
+                crate::json::project::update_project_category(p, &category);
+                self.categories = PlainListItems::<Category>::load();
+                self.projects = TableItems::<Project>::load();
                 self.projects.select_state(i);
             }
             _ => {}
@@ -486,11 +472,11 @@ impl App {
     }
 
     pub fn cycle_priority(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        //TODO delete
         match self.todos.current_state() {
             (idx, Some(t)) => {
                 let priority = (t.priority + 1) % 3;
-                crate::sql::todo::update_todo_priority(&conn, t.id, priority);
+                crate::json::todo::update_todo_priority(t.id, priority);
                 // TODO
                 // self.todos = FilteredListItems::<Todo>::load(&conn);
                 // self.todos.filter_from_projects(t.project_id.clone());
@@ -502,12 +488,12 @@ impl App {
     }
 
     pub fn delete_project(&mut self) {
-        let conn = Connection::open(home_path(PATH_DB)).unwrap();
+        // TODO delete
         match self.projects.current() {
             Some(p) => {
-                crate::sql::project::delete_project(&conn, p);
-                self.projects = TableItems::<Project>::load(&conn);
-                self.todos = FilteredListItems::<Todo>::load(&conn);
+                crate::json::project::delete_project(p);
+                self.projects = TableItems::<Project>::load();
+                self.todos = FilteredListItems::<Todo>::load();
                 self.default_close();
             }
             _ => (),
@@ -536,8 +522,7 @@ impl App {
         if self.window.base == BaseWindow::Project {
             match self.projects.current() {
                 Some(p) => {
-                    let conn = Connection::open(home_path(PATH_DB)).unwrap();
-                    update_project_sort(&conn, self.index, (p.sort + 1).into());
+                    update_project_sort(self.index, (p.sort + 1).into());
                     self.reload();
                     self.index = 0;
                     self.window.to_normal();

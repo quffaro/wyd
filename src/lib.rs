@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use const_format::formatcp;
 use dirs::home_dir;
 
@@ -13,9 +14,8 @@ pub mod tui;
 /// Event handler.
 pub mod handler;
 
+/// JSON
 pub mod json;
-/// SQL scripts
-pub mod sql;
 
 /// Request
 pub mod request;

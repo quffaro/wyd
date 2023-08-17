@@ -1,8 +1,8 @@
 use crate::app::structs::category::Category;
 use serde::{Deserialize, Serialize};
 
-pub fn read_category() -> Result<Vec<Category>> {
-    let mut 
+// pub fn read_category() -> Result<Vec<Category>> {
+// let mut
 
 // const READ_CATEGORY: &str = "select id,name from category";
 // pub fn read_category(conn: &Connection) -> Result<Vec<Category>, rusqlite::Error> {

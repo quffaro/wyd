@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use ini::Ini;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;

@@ -1,8 +1,7 @@
 use crate::app::structs::config::load_config;
-use crate::sql::project::{read_project_repos, update_project_last_commit};
+use crate::json::project::{read_project_repos, update_project_last_commit};
 use crate::{app::structs::projects::Project, home_path, PATH_DB, PATH_PAT};
 use reqwest::{header, ClientBuilder, Result};
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::json;
 use std::fs;
@@ -15,8 +14,7 @@ struct Commit {
 
 #[tokio::main]
 pub async fn request_commit() -> Result<()> {
-    let conn = Connection::open(home_path(PATH_DB)).unwrap();
-    let projects = read_project_repos(&conn).unwrap();
+    let projects = read_project_repos().unwrap();
 
     let config = load_config();
     // println!("{:#?}", &config);
@@ -28,7 +26,7 @@ pub async fn request_commit() -> Result<()> {
                     .as_str()
                     .and_then(|x| Some(x.to_owned()));
                 // println!("{:#?}", request);
-                update_project_last_commit(&conn, &p, request.unwrap());
+                update_project_last_commit(&p, request.unwrap());
             }
         }
         None => (),

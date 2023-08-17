@@ -1,9 +1,6 @@
 use crate::app::structs::projects::{Project, ProjectBuilder};
-use rusqlite::{params, Connection, Result};
 use std::env;
 
-const READ_PROJECT: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project";
 pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
@@ -32,8 +29,6 @@ pub fn read_project() -> Result<Vec<Project>, rusqlite::Error> {
     res
 }
 
-const READ_V_PROJECT: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from v_project";
 pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT)?;
     let res = stmt
@@ -65,8 +60,6 @@ pub fn read_v_project(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error
 }
 
 /// READ PROJECTS FROM DB
-const READ_PROJECT_REPOS: &str =
-    "select id,path,name,desc,cat,status,is_git,owner,repo,last_commit,sort from project where repo is not null and owner is not null";
 pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
     let mut stmt = conn.prepare(READ_PROJECT_REPOS)?;
     let res = stmt
@@ -96,22 +89,6 @@ pub fn read_project_repos(conn: &Connection) -> Result<Vec<Project>, rusqlite::E
 }
 
 /// WRITE PROJECT TO DB
-const INSERT_PROJECT: &str = "insert into project (
-    path,
-    name, 
-    desc, 
-    cat, 
-    status, 
-    is_git,
-    owner,
-    repo,
-    last_commit,
-    sort
-) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);";
-const INSERT_INTO_PROJECT_PATH: &str = "insert into project_path (
-    path,
-    project_id
-) values (?1, ?2);";
 pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite::Error> {
     let mut stmt = conn.prepare(INSERT_PROJECT)?;
     stmt.execute(params![
@@ -132,7 +109,6 @@ pub fn write_project(conn: &Connection, project: Project) -> Result<(), rusqlite
     Ok(())
 }
 
-const UPDATE_PROJECT_DESC: &str = "update project set desc = ?1 where id = ?2;";
 pub fn update_project_desc(
     conn: &Connection,
     pid: u8,
@@ -142,7 +118,6 @@ pub fn update_project_desc(
 
     Ok(())
 }
-const UPDATE_PROJECT_CAT: &str = "update project set cat = ?1 where id = ?2;";
 pub fn update_project_category(
     conn: &Connection,
     project: &Project,
@@ -154,7 +129,6 @@ pub fn update_project_category(
     Ok(())
 }
 
-const UPDATE_PROJECT_LAST_COMMIT: &str = "update project set last_commit = ?1 where id = ?2;";
 pub fn update_project_last_commit(
     conn: &Connection,
     project: &Project,
@@ -166,7 +140,6 @@ pub fn update_project_last_commit(
     Ok(())
 }
 
-const UPDATE_PROJECT_SORT: &str = "update project set sort = ?1 where id = ?2;";
 pub fn update_project_sort(
     conn: &Connection,
     p_id: usize,
@@ -178,7 +151,6 @@ pub fn update_project_sort(
     Ok(())
 }
 
-const UPDATE_PROJECT_STATUS: &str = "update project set status = ?1 where id = ?2;";
 pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
     conn.execute(
         UPDATE_PROJECT_STATUS,
@@ -189,9 +161,6 @@ pub fn update_project_status(conn: &Connection, project: &Project) -> Result<(),
     Ok(())
 }
 
-const DELETE_PROJECT: &str = "delete from project where id = ?1; 
-    delete from project_path where project_id = ?1;
-    delete from todo where project_id = ?1";
 pub fn delete_project(conn: &Connection, project: &Project) -> Result<(), rusqlite::Error> {
     conn.execute(DELETE_PROJECT, [project.id]).expect("AAA");
 

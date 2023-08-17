@@ -1,11 +1,10 @@
 use super::{ListNav, ListState, PlainListItems};
 use crate::{
     app::structs::projects::Project,
-    sql::{category::read_category, project::update_project_category},
+    json::{category::read_category, project::update_project_category},
 };
-use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize}
 
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct Category {

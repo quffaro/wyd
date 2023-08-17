@@ -1,5 +1,6 @@
 // use crate::app::structs;
 use super::{ListNav, TableItems, TableState};
+use crate::app::structs::todos::Todo;
 use crate::json::project::{read_project, update_project_status};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -29,7 +30,7 @@ impl Project {
     pub fn load() -> Vec<Project> {
         let projects = read_project().expect("READ PROJECT ERROR");
 
-        projects.into_iter().sorted_by_key(|x| x.sort).collect();
+        projects.into_iter().sorted_by_key(|x| x.sort).collect()
     }
     // TODO
     pub fn new_in_pwd() -> Project {
@@ -47,7 +48,7 @@ impl Project {
             owner: "".to_owned(), //TODO
             repo: current_dir.clone(),
             last_commit: "N/A".to_owned(),
-            todos: [],
+            todos: Vec::new(),
         }
     }
     // TODO this is
@@ -74,7 +75,7 @@ pub struct ProjectBuilder {
     owner: String,
     repo: String,
     last_commit: String,
-    todos: [],
+    todos: Vec<Todo>,
 }
 
 impl ProjectBuilder {
@@ -174,6 +175,9 @@ impl TableItems<Project> {
             None => (None, None),
         }
     }
+    pub fn current_todos(&self) -> Option<Vec<Todo>> {
+        self.current().and_then(|p| Some(p.todos))
+    }
     pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
@@ -186,7 +190,7 @@ impl TableItems<Project> {
     }
 }
 
-#[derive(Default, PartialEq, Eq, Debug, Clone, EnumString)]
+#[derive(Default, PartialEq, Eq, Debug, Clone, EnumString, Serialize, Deserialize)]
 pub enum ProjectStatus {
     #[default]
     Stable,
