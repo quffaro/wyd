@@ -6,7 +6,7 @@ use self::structs::{
     projects::Project,
     todos::Todo,
     windows::{BaseWindow, Mode, Popup, Window},
-    FilteredListItems, ListNav, PlainListItems, TableItems,
+    ListItems, ListNav, NestedTableItems, SubListNav, TableItems,
 };
 use crate::app::ui::{
     base::{
@@ -48,39 +48,26 @@ pub struct App {
     pub config: Option<Config>,
     pub window: Window,
     pub jobs: JobRoster,
-    pub projects: TableItems<Project>,
+    pub categories: ListItems<Category>,
+    pub projects: NestedTableItems<Project>,
     pub configs: TableItems<GitConfig>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        match load_config() {
-            Some(c) => App {
-                running: true,
-                tick: 0,
-                index: 0,
-                msg: "Nothing".to_owned(),
-                input: Input::default(),
-                is_popup_loading: false,
-                config: Some(c),
-                window: Window::load(true),
-                jobs: JobRoster::new(),
-                projects: TableItems::<Project>::default(),
-                configs: TableItems::<GitConfig>::default(),
-            },
-            None => App {
-                running: true,
-                tick: 0,
-                index: 0,
-                msg: "Nothing".to_owned(),
-                input: Input::default(),
-                is_popup_loading: false,
-                config: None,
-                window: Window::load(false),
-                jobs: JobRoster::new(),
-                projects: TableItems::<Project>::default(),
-                configs: TableItems::<GitConfig>::default(),
-            },
+        Self {
+            running: true,
+            tick: 0,
+            index: 0,
+            msg: "Nothing".to_owned(),
+            input: Input::default(),
+            is_popup_loading: false,
+            config: load_config(),
+            window: Window::load(true),
+            jobs: JobRoster::new(),
+            categories: ListItems::<Category>::default(),
+            projects: NestedTableItems::<Project>::default(),
+            configs: TableItems::<GitConfig>::default(),
         }
     }
 }
@@ -93,33 +80,19 @@ impl App {
 
     /// Loads data into the app
     pub fn load() -> Self {
-        match load_config() {
-            Some(c) => Self {
-                running: true,
-                tick: 0,
-                index: 0,
-                msg: "Nothing".to_owned(),
-                input: Input::default(),
-                is_popup_loading: false,
-                config: Some(c),
-                window: Window::load(true),
-                jobs: JobRoster::new(),
-                projects: TableItems::<Project>::load(),
-                configs: TableItems::<GitConfig>::load(),
-            },
-            None => Self {
-                running: true,
-                tick: 0,
-                index: 0,
-                msg: "Nothing".to_owned(),
-                input: Input::default(),
-                is_popup_loading: false,
-                config: None,
-                window: Window::load(false),
-                jobs: JobRoster::new(),
-                projects: TableItems::<Project>::load(),
-                configs: TableItems::<GitConfig>::load(),
-            },
+        Self {
+            running: true,
+            tick: 0,
+            index: 0,
+            msg: "Nothing".to_owned(),
+            input: Input::default(),
+            is_popup_loading: false,
+            config: load_config(),
+            window: Window::load(true),
+            jobs: JobRoster::new(),
+            categories: ListItems::<Category>::load(),
+            projects: NestedTableItems::<Project>::load(),
+            configs: TableItems::<GitConfig>::load(),
         }
     }
 
@@ -127,7 +100,7 @@ impl App {
         // TODO should retain selection...
         match self.projects.get_state_selected() {
             Some(idx) => {
-                self.projects = TableItems::<Project>::load();
+                self.projects = NestedTableItems::<Project>::load();
                 self.projects.select_state(Some(idx));
             }
             _ => (),
@@ -233,7 +206,7 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
                 ..
-            } => self.projects.toggle_todo(),
+            } => self.projects.toggle(),
             Window {
                 popup: Popup::SearchGitConfigs,
                 base: _,
@@ -292,7 +265,11 @@ impl App {
 
         let (todo_block, desc_block) = render_todo_and_desc(self);
         let todo_table = render_todo(self);
-        frame.render_stateful_widget(todo_table, project_info_chunk[0], &mut self.todos.state);
+        frame.render_stateful_widget(
+            todo_table,
+            project_info_chunk[0],
+            &mut self.projects.substate,
+        );
         frame.render_widget(desc_block, project_info_chunk[1]);
 
         // CHUNK 3
@@ -351,7 +328,7 @@ impl App {
     fn write_project(&mut self, project: Project) {
         crate::json::project::write_project(project);
 
-        self.projects = TableItems::<Project>::load();
+        self.projects = NestedTableItems::<Project>::load();
     }
 
     pub fn write_close_new_project(&mut self, project: Project) {
@@ -407,7 +384,8 @@ impl App {
 
     pub fn write_close_gitconfig(&mut self) {
         crate::json::tmp_config::write_tmp_to_project();
-        self.projects = TableItems::<Project>::load();
+        // TODO reload app
+        self.projects = NestedTableItems::<Project>::load();
         self.default_close();
     }
 
@@ -420,8 +398,8 @@ impl App {
                 crate::json::category::write_category(&value);
                 // TODO needs to work if above write is successful
                 crate::json::project::update_project_category(p, &value);
-                // reload
-                self.projects = TableItems::<Project>::load();
+                // TODO reload
+                self.projects = NestedTableItems::<Project>::load();
                 self.projects.select_state(i);
             }
             _ => {}
@@ -434,8 +412,9 @@ impl App {
         match self.projects.current_state() {
             (i, Some(p)) => {
                 let category = self.categories.current().unwrap().name.to_string();
-                crate::json::project::update_project_category(p, &category);
-                self.projects = TableItems::<Project>::load();
+                // TODO
+                // crate::json::project::update_project_category(p, &category);
+                self.projects = NestedTableItems::<Project>::load();
                 self.projects.select_state(i);
             }
             _ => {}
@@ -445,14 +424,13 @@ impl App {
 
     pub fn cycle_priority(&mut self) {
         //TODO delete
-        match self.projects.current_todo_state() {
-            (idx, Some(t)) => {
-                let priority = (t.priority + 1) % 3;
-                crate::json::todo::update_todo_priority(t.id, priority);
-                // TODO
-            }
-            _ => (),
-        }
+        // match self.projects.current_todos() {
+        //     (idx, Some(t)) => {
+        //         let priority = (t.priority + 1) % 3;
+        //         crate::json::todo::update_todo_priority(t.id, priority);
+        //         // TODO
+        //     }
+        //     _ => (),
     }
 
     pub fn delete_project(&mut self) {
@@ -460,7 +438,7 @@ impl App {
         match self.projects.current() {
             Some(p) => {
                 crate::json::project::delete_project(p);
-                self.projects = TableItems::<Project>::load();
+                self.projects = NestedTableItems::<Project>::load();
                 self.default_close();
             }
             _ => (),

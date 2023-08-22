@@ -1,5 +1,5 @@
 // use crate::app::structs;
-use super::{ListNav, TableItems, TableState};
+use super::{ListNav, ListState, NestedTableItems, SubListNav, TableItems, TableState};
 use crate::app::structs::todos::Todo;
 use crate::json::project::{read_project, update_project_status};
 use itertools::Itertools;
@@ -10,6 +10,8 @@ use strum_macros::EnumString;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Project {
     pub id: u8, // TODO default 0
+    pub parent_id: Option<u8>,
+    pub child_ids: Vec<u8>,
     pub sort: u8,
     pub path: String,
     pub name: String,
@@ -38,6 +40,8 @@ impl Project {
         let name = current_dir.clone();
         Project {
             id: 0,
+            parent_id: None,
+            child_ids: vec![],
             sort: 0,
             path: current_dir.clone(),
             name: name,
@@ -133,6 +137,8 @@ impl ProjectBuilder {
     pub fn build(self) -> Project {
         Project {
             id: self.id, // TODO default
+            parent_id: None,
+            child_ids: vec![],
             sort: self.sort,
             path: self.path,
             name: self.name,
@@ -148,22 +154,15 @@ impl ProjectBuilder {
     }
 }
 
-impl TableItems<Project> {
-    pub fn load() -> TableItems<Project> {
-        TableItems {
+impl NestedTableItems<Project> {
+    pub fn load() -> NestedTableItems<Project> {
+        NestedTableItems {
             items: Project::load(),
             state: TableState::default(),
+            substateCount: 0,
             substate: ListState::default(),
         }
     }
-    // pub fn reload(mut self, conn: Option<Connection>, idx: Option<u8>) {
-    //     self = TableItems::<Project>::load(conn);
-    //     match idx {
-    //         Some(i) => self.select_state(i),
-    //         None => self.select_state(0),
-    //     }
-
-    // }
     pub fn current(&self) -> Option<&Project> {
         match self.get_state_selected() {
             Some(idx) => self.items.iter().nth(idx),
@@ -174,6 +173,16 @@ impl TableItems<Project> {
         match self.get_state_selected() {
             Some(idx) => (Some(idx), self.items.iter().nth(idx)),
             None => (None, None),
+        }
+    }
+    pub fn current_todo(&self) -> Option<&Todo> {
+        match (self.get_state_selected(), self.get_substate_selected()) {
+            (Some(idx), Some(idy)) => self
+                .current()
+                .iter()
+                .nth(idx)
+                .and_then(|&&p| p.todos.iter().nth(idy)),
+            _ => None,
         }
     }
     pub fn current_todos(&self) -> Option<Vec<Todo>> {

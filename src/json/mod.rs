@@ -16,7 +16,7 @@ pub mod todo;
 const JSON_DB: &str = "./config/wyd/db.json";
 
 // TODO to may?
-pub fn read_json() -> Vec<Project> {
+pub fn read_json() -> Result<Vec<Project>> {
     let mut projects: Vec<Project> = {
         let data = fs::read_to_string(JSON_DB);
         match data {
@@ -25,7 +25,7 @@ pub fn read_json() -> Vec<Project> {
                 let new = json!(
                     {"projects": []});
                 fs::write(JSON_DB, serde_json::to_string_pretty(&new).unwrap());
-                vec![] 
+                vec![]
             }
         }
     };
@@ -33,4 +33,6 @@ pub fn read_json() -> Vec<Project> {
     projects
 }
 
-pub fn write_json(projects: Vec<Project>) -> Result<()>
+pub fn write_json(projects: Vec<Project>) -> Result<()> {
+    Ok(())
+}

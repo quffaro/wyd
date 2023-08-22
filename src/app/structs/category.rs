@@ -1,4 +1,4 @@
-use super::{ListNav, ListState, PlainListItems};
+use super::{ListNav, ListState};
 use crate::{
     app::structs::projects::Project,
     json::{category::read_category, project::update_project_category},
@@ -25,7 +25,7 @@ impl Category {
 }
 
 impl PlainListItems<Category> {
-    pub fn load() -> PlainListItems<Category> {
+    pub fn load() -> ListItems<Category> {
         PlainListItems {
             items: Category::load(),
             state: ListState::default(),

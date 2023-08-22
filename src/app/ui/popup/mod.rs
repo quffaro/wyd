@@ -172,11 +172,12 @@ pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_,
                 .title("(edit category)")
                 .border_type(BorderType::Plain);
 
-            let categories: Vec<ListItem> = app
-                .categories
-                .items
+            let categories: Vec<ListItem> = vec!["Category 1"]
+                // app
+                // .categories
+                // .items
                 .iter()
-                .map(|t| ListItem::new(format!("{}", t.name)))
+                .map(|t| ListItem::new(format!("{}", t)))
                 .collect();
 
             // IF THERE ARE NONE
@@ -220,6 +221,7 @@ pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_,
     }
 }
 
+/// TODO can we make a macro to populate this bad boy?
 pub fn render_popup_help_table<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
     let size = frame.size();
     let area = centered_rect(80, 40, size);
@@ -389,7 +391,7 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
 }
 
 pub fn render_popup_read_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
-    match app.todos.current() {
+    match app.projects.current_todos() {
         Some(t) => {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
