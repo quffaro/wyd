@@ -1,4 +1,9 @@
 #![allow(unused_imports)]
+#![allow(unused_doc_comments)]
+
+#[macro_use]
+extern crate derive_builder;
+
 use ini::Ini;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -10,14 +15,21 @@ use wyd::handler::{handle_key_events, handle_mouse_events};
 use wyd::tui::Tui;
 use wyd::{home_path, PATH_CONFIG, PATH_DB};
 
+use wyd::app::structs::projects::Project;
+use wyd::json::{read_json, SaveFile};
+
 fn main() -> AppResult<()> {
     // intiialize db
-    wyd::json::initialize_db(&conn)?;
+    // wyd::json::initialize_db(&conn)?;
+    // TODO retype as SaveFile
+    let projects: Vec<Project> = read_json()?;
+    // println!("MAIN: {:?}", projects);
 
     // Create an application.
     let mut app = App::load();
     app.default_select();
 
+    // println!("APP: {:?}", &app.projects.items);
     //     match Ini::load_from_file(home_path(PATH_CONFIG)) {
     //         Ok(c) => {
     //             let y = wyd::app::structs::config::get_config_color(c);
@@ -28,7 +40,7 @@ fn main() -> AppResult<()> {
     //     }
 
     // init
-    thread::spawn(|| wyd::json::tmp_config::init_tmp_git_config());
+    // thread::spawn(|| wyd::json::tmp_config::init_tmp_git_config());
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());

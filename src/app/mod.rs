@@ -4,10 +4,11 @@ use self::structs::{
     gitconfig::GitConfig,
     jobs::{JobRoster, LoadingState},
     projects::Project,
-    todos::Todo,
+    todos::{Todo, TodoBuilder},
     windows::{BaseWindow, Mode, Popup, Window},
     ListItems, ListNav, NestedTableItems, SubListNav, TableItems,
 };
+use crate::app::structs::projects::ProjectBuilder;
 use crate::app::ui::{
     base::{
         render_projects, render_title, render_title_and_search, render_todo, render_todo_and_desc,
@@ -15,22 +16,17 @@ use crate::app::ui::{
     popup::render_popup_todo,
     render_loading,
 };
-use crate::json::project::{update_project_desc, update_project_sort, write_project};
+use crate::json::{read_json, write_json};
 use crate::{home_path, PATH_DB};
 use ratatui::backend::Backend;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::terminal::Frame;
 use std::error;
+use std::fs;
 use tui_input::Input;
-
 pub mod regex;
 pub mod structs;
 pub mod ui;
-
-pub struct JsonDB {
-    pub categories: Vec<Category>,
-    pub projects: Vec<Project>,
-}
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
@@ -73,6 +69,10 @@ impl Default for App {
 }
 
 impl App {
+    pub fn test(&mut self) {
+        self.projects.substate.select(Some(1))
+    }
+
     /// Constructs a new instance of [`App`].
     pub fn new() -> Self {
         Self::default()
@@ -97,11 +97,17 @@ impl App {
     }
 
     pub fn reload(&mut self) {
-        // TODO should retain selection...
+        // TODO ...
+        let (x, y) = (
+            self.projects.get_state_selected(),
+            self.projects.get_substate_selected(),
+        );
+
         match self.projects.get_state_selected() {
-            Some(idx) => {
+            x => {
                 self.projects = NestedTableItems::<Project>::load();
-                self.projects.select_state(Some(idx));
+                self.projects.select_state(x);
+                self.projects.select_substate(y);
             }
             _ => (),
         }
@@ -123,7 +129,7 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Project,
                 ..
-            } => self.projects.next(),
+            } => self.projects.project_next(),
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
@@ -148,7 +154,7 @@ impl App {
                 popup: Popup::None,
                 base: BaseWindow::Project,
                 ..
-            } => self.projects.previous(),
+            } => self.projects.project_previous(),
             Window {
                 popup: Popup::None,
                 base: BaseWindow::Todo,
@@ -186,6 +192,7 @@ impl App {
     pub fn default_select(&mut self) {
         // TODO what if there aren't any?
         self.projects.state.select(Some(0));
+        self.projects.substate.select(Some(0));
         self.configs.state.select(Some(0));
         self.categories.state.select(Some(0));
 
@@ -293,16 +300,43 @@ impl App {
             _ => {}
         }
     }
-
-    /// TODO move body into another function and have this one reload it
+    pub fn add_project_to_app(&mut self, project: Project) {
+        self.projects.items.push(project);
+        crate::json::project::write_projects(&self.projects.items);
+        self.reload();
+    }
+    // TODO move body into another function and have this one reload it
     pub fn add_project_in_dir(&mut self, is_find_git: bool) {
         // TODO i want a rule which handles whether this operation will be performed before calling
-        // a SQL rule. SQL rules should only be called when a write is certain
-        crate::json::project::add_project_in_dir(is_find_git);
-        self.reload();
-        // self.projects = TableItems::<Project>::load(&conn);
-    }
+        // let mut projects = &mut self.projects.items;
+        // projects.push(ProjectBuilder::new().id(1).build());
+        // crate::json::project::write_projects(projects);
+        // self.reload();
+        // TODO unwrap not ideal
 
+        self.add_project_to_app(
+            ProjectBuilder::default()
+                .id(1)
+                .parent_id(0)
+                .child_ids(vec![])
+                .sort(0)
+                .path("".to_string())
+                .name("".to_string())
+                .desc("".to_string())
+                .category("".to_string())
+                .status(crate::app::structs::projects::ProjectStatus::Stable)
+                .is_git(false)
+                .owner("".to_string())
+                .repo("".to_string())
+                .last_commit("".to_string())
+                .todos(vec![])
+                .build()
+                .unwrap(),
+        );
+    }
+    pub fn current_project_name(&self) -> Option<&String> {
+        self.projects.current().map(|p| &p.name)
+    }
     pub fn to_search(&mut self) {
         self.window.to_search()
     }
@@ -323,11 +357,9 @@ impl App {
         self.default_input();
         self.close_popup();
     }
-    /// JSON RULES
-    /// adds
+    // JSON RULES
     fn write_project(&mut self, project: Project) {
-        crate::json::project::write_project(project);
-
+        // crate::json::project::write_project(project);
         self.projects = NestedTableItems::<Project>::load();
     }
 
@@ -336,35 +368,62 @@ impl App {
         self.default_close();
     }
 
+    fn write(&mut self) {
+        crate::json::project::write_projects(&self.projects.items);
+    }
+
     fn write_todo(&mut self) {
-        let project_id = self
-            .projects
-            .current()
-            .and_then(|p| Some(p.id))
-            .or_else(|| Some(0));
+        let (i, mut project) = self.projects.current_state();
+        let mut p = project.unwrap().clone();
 
-        crate::json::todo::write_new_todo(
-            // TODO constructor
-            vec![Todo {
-                id: 0,
-                parent_id: 0,
-                project_id: project_id.unwrap(),
-                todo: self.input.value().to_owned(),
-                is_complete: false,
-                priority: 1,
-            }],
-        );
+        let current_todo = self.projects.current_todo();
 
-        /// RELOAD
+        let todo = TodoBuilder::default()
+            .id(0)
+            // .todos
+            // .iter()
+            // .max_by_key(|p| p.id)
+            // .and_then(|x| Some(x.id + 1))
+            // .unwrap())
+            .project_id(p.id)
+            .parent_id(current_todo.map_or(1, |t| t.id))
+            .depth(current_todo.map_or(1, |t| t.depth + 1))
+            .todo(self.input.value().to_owned())
+            .is_complete(false)
+            .priority(1)
+            .build()
+            .unwrap();
+
+        p.todos.push(todo);
+        self.projects.items[i.unwrap()] = p;
+        self.write();
+
+        // RELOAD
         self.reload();
-        // self.todos = FilteredListItems::<Todo>::load();
-        // self.todos.select_filter_state(Some(0), project_id);
+    }
+
+    pub fn inc_todo_depth(&mut self, inc: i8) {
+        let (i, mut project) = self.projects.current_state();
+        let mut p = project.unwrap().clone();
+
+        let mut current_todo = self.projects.current_todo().unwrap().clone();
+        current_todo.change_depth(inc);
+        // current_todo.map(|p| p.change_depth(inc));
+
+        let idx = self.projects.substate.selected();
+        p.todos[idx.unwrap()] = current_todo;
+
+        self.projects.items[i.unwrap()] = p;
+        self.write();
+
+        // RELOAD
+        self.reload();
     }
 
     fn update_project_desc(&mut self) {
         match self.projects.current_state() {
             (i, Some(p)) => {
-                crate::json::project::update_project_desc(p.id, self.input.value().to_owned());
+                // crate::json::project::update_project_desc(p.id, self.input.value().to_owned());
                 self.reload();
                 self.projects.select_state(i);
             }
@@ -383,7 +442,7 @@ impl App {
     }
 
     pub fn write_close_gitconfig(&mut self) {
-        crate::json::tmp_config::write_tmp_to_project();
+        // crate::json::tmp_config::write_tmp_to_project();
         // TODO reload app
         self.projects = NestedTableItems::<Project>::load();
         self.default_close();
@@ -395,9 +454,9 @@ impl App {
         match self.projects.current_state() {
             (i, Some(p)) => {
                 let value = self.input.value().to_owned();
-                crate::json::category::write_category(&value);
+                // crate::json::category::write_category(&value);
                 // TODO needs to work if above write is successful
-                crate::json::project::update_project_category(p, &value);
+                // crate::json::project::update_project_category(p, &value);
                 // TODO reload
                 self.projects = NestedTableItems::<Project>::load();
                 self.projects.select_state(i);
@@ -437,7 +496,7 @@ impl App {
         // TODO delete
         match self.projects.current() {
             Some(p) => {
-                crate::json::project::delete_project(p);
+                // crate::json::project::delete_project(p);
                 self.projects = NestedTableItems::<Project>::load();
                 self.default_close();
             }
@@ -467,7 +526,7 @@ impl App {
         if self.window.base == BaseWindow::Project {
             match self.projects.current() {
                 Some(p) => {
-                    update_project_sort(self.index, (p.sort + 1).into());
+                    // update_project_sort(self.index, (p.sort + 1).into());
                     self.reload();
                     self.index = 0;
                     self.window.to_normal();

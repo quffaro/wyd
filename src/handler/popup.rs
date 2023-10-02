@@ -26,9 +26,11 @@ pub fn handle_popup_new_project(key_event: KeyEvent, app: &mut App) {
                 code: KeyCode::Char('w'),
                 ..
             } => app.write_close_new_project(
-                ProjectBuilder::new()
+                ProjectBuilder::default()
                     .name(app.input.value().to_owned())
-                    .build(),
+                    .build()
+                    .unwrap(),
+                // TODO unwrap not ideal
             ),
             KeyEvent {
                 code: KeyCode::Char('i'),

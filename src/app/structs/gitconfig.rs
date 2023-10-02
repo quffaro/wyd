@@ -1,6 +1,6 @@
 use super::super::regex::regex_last_dir;
 use super::{TableItems, TableState};
-use crate::json::tmp_config::{read_tmp, update_tmp};
+// use crate::json::tmp_config::{read_tmp, update_tmp};
 use crate::{CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX, GLOB_GITCONFIG_SUFFIX};
 use glob::glob;
 use ini::Ini;
@@ -16,8 +16,8 @@ pub struct GitConfig {
 impl GitConfig {
     pub fn load() -> Vec<GitConfig> {
         // TODO unwrap
-        read_tmp().unwrap()
-        // vec![]
+        // read_tmp().unwrap()
+        vec![]
     }
 }
 
@@ -33,7 +33,7 @@ impl TableItems<GitConfig> {
         for i in 0..self.items.len() {
             if i == selected {
                 self.items[i].is_selected = !self.items[i].is_selected;
-                update_tmp(&self.items[i]); // TODO
+                // update_tmp(&self.items[i]); // TODO
             } else {
                 continue;
             }
@@ -73,6 +73,6 @@ pub fn fetch_config_files() -> Vec<String> {
                 .replace(GITCONFIG_SUFFIX, "")
         })
         .collect();
-
-    tmp
+    vec![]
+    // tmp
 }

@@ -48,6 +48,7 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                         app.running = false;
                     }
                 }
+                KeyCode::Char('u') => app.test(),
                 KeyCode::Char(';') | KeyCode::Right => app.cycle_focus_next(),
                 KeyCode::Char('j') | KeyCode::Left => app.cycle_focus_previous(),
                 KeyCode::Tab => {
@@ -65,6 +66,9 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 KeyCode::Char('A') => app.add_project_in_dir(true),
                 KeyCode::Char('y') => app.yank(),
                 KeyCode::Char('c') => app.cycle_priority(),
+                //
+                KeyCode::Char(']') => app.inc_todo_depth(1),
+                KeyCode::Char('[') => app.inc_todo_depth(-1),
                 // popup
                 KeyCode::Char('T') => app.popup(Popup::ReadTodo, None),
                 KeyCode::Char('a') => app.popup(Popup::NewProject, Some(Mode::Insert)),
@@ -72,6 +76,7 @@ pub fn handle_base(key_event: KeyEvent, app: &mut App) {
                 KeyCode::Char('R') => app.popup(Popup::NewCat, None),
                 KeyCode::Char('t') => app.popup(Popup::AddTodo, Some(Mode::Insert)),
                 KeyCode::Char('e') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
+                KeyCode::Char('E') => app.popup(Popup::EditDesc, Some(Mode::Insert)),
                 KeyCode::Char('G') => app.popup(Popup::SearchGitConfigs, Some(Mode::Normal)),
                 KeyCode::Char('d') => app.popup(Popup::DeleteProject, None),
                 KeyCode::Char('h') => app.popup(Popup::Help, None),

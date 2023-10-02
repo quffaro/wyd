@@ -1,7 +1,7 @@
 use crate::app::structs::{
     config::{Config, WydColor},
     windows::{BaseWindow, Mode, WindowStatus},
-    ListNav,
+    ListNav, SubListNav,
 };
 use crate::app::ui::wyd_to_color;
 use crate::app::{App, Popup};
@@ -69,7 +69,7 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         .projects
         .items
         .iter()
-        // .filter(|s| s.name.contains(app.input.value()))
+        // TODO .filter(|s| s.name.contains(app.input.value()))
         .map(|p| {
             Row::new(vec![
                 Cell::from(
@@ -136,13 +136,13 @@ pub fn render_todo<'a>(app: &App) -> Table<'a> {
     let rows: Vec<Row> = app
         .projects
         .current_todos()
-        .iter()
+        .into_iter()
         .flatten()
         .map(|t| {
             Row::new(vec![
                 Cell::from(match t.is_complete {
-                    true => format!("[x] {}", t.todo.clone()),
-                    false => format!("[ ] {}", t.todo.clone()),
+                    true => format!("{}[x] {}", " ".repeat(t.depth.into()), t.todo.clone()),
+                    false => format!("{}[ ] {}", " ".repeat(t.depth.into()), t.todo.clone()),
                 }),
                 Cell::from(t.priority.to_string()),
             ])
@@ -158,18 +158,15 @@ pub fn render_todo<'a>(app: &App) -> Table<'a> {
                 .borders(Borders::ALL)
                 .style(
                     Style::default()
-                        .fg(
-                            if app.window.base == BaseWindow::Todo
-                                && app.window.popup == Popup::None
-                            {
-                                app.config
-                                    .clone()
-                                    .and_then(|c| Some(wyd_to_color(c.color.bd)))
-                                    .unwrap()
-                            } else {
-                                Color::White
-                            },
-                        )
+                        .fg(if app.window.base == BaseWindow::Todo {
+                            Color::Yellow
+                            // app.config
+                            //     .clone()
+                            //     .and_then(|c| Some(wyd_to_color(c.color.bd)))
+                            //     .unwrap_or(Color::White)
+                        } else {
+                            Color::White
+                        })
                         .bg(Color::Black),
                 )
                 .border_type(BorderType::Plain),
@@ -209,7 +206,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
     let todo_items: Vec<ListItem> = app
         .projects
         .current_todos()
-        .iter()
+        .into_iter()
         .flatten()
         .map(|t| {
             if t.is_complete {
@@ -231,13 +228,14 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let project_desc = match app.projects.get_state_selected() {
-        Some(i) => match app.projects.items.iter().nth(i) {
-            Some(p) => p.desc.to_owned(),
-            None => "".to_owned(),
-        },
-        None => "".to_owned(),
-    };
+    let project_desc = format!("{:?}", app.projects);
+    // let project_desc = match app.projects.get_state_selected() {
+    //     Some(i) => match app.projects.items.iter().nth(i) {
+    //         Some(p) => p.desc.to_owned(),
+    //         None => "".to_owned(),
+    //     },
+    //     None => "".to_owned(),
+    // };
 
     let right = Paragraph::new(project_desc)
         .block(

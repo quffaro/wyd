@@ -1,13 +1,15 @@
 // use crate::app::structs;
 use super::{ListNav, ListState, NestedTableItems, SubListNav, TableItems, TableState};
 use crate::app::structs::todos::Todo;
-use crate::json::project::{read_project, update_project_status};
+use crate::json::read_json;
+use derive_builder::Builder;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt};
 use strum_macros::EnumString;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Builder, Deserialize, Serialize)]
+#[builder(setter(into))]
 pub struct Project {
     pub id: u8, // TODO default 0
     pub parent_id: Option<u8>,
@@ -29,15 +31,19 @@ impl Project {
     pub fn builder() -> ProjectBuilder {
         ProjectBuilder::default()
     }
+    // TODO to Option
     pub fn load() -> Vec<Project> {
-        let projects = read_project().expect("READ PROJECT ERROR");
-
-        projects.into_iter().sorted_by_key(|x| x.sort).collect()
+        let projects = read_json().unwrap();
+        // vec![ProjectBuilder::new().build()];
+        // read_project().expect("READ PROJECT ERROR");
+        projects
+        // projects.into_iter().sorted_by_key(|x| x.sort()).collect()
     }
     // TODO
     pub fn new_in_pwd() -> Project {
         let current_dir = env::current_dir().unwrap().display().to_string();
         let name = current_dir.clone();
+        // TODO use builder
         Project {
             id: 0,
             parent_id: None,
@@ -62,106 +68,48 @@ impl Project {
             ProjectStatus::Unstable => ProjectStatus::Stable,
         };
         // TODO we need to write this
-        update_project_status(self);
+        // update_project_status(self);
+    }
+
+    pub fn get_todos_len(&self) -> usize {
+        self.todos.len()
+    }
+
+    pub fn add_todo(&mut self, todo: Todo) {
+        self.todos.push(todo)
     }
 }
 
-#[derive(Default)]
-pub struct ProjectBuilder {
-    id: u8,
-    sort: u8,
-    path: String,
-    name: String,
-    desc: String,
-    category: String,
-    status: ProjectStatus,
-    is_git: bool,
-    owner: String,
-    repo: String,
-    last_commit: String,
-    todos: Vec<Todo>,
-}
-
-impl ProjectBuilder {
-    pub fn new() -> ProjectBuilder {
-        ProjectBuilder::default()
-    }
-    pub fn id(mut self, id: u8) -> Self {
-        self.id = id;
-        self
-    }
-    pub fn sort(mut self, sort: u8) -> Self {
-        self.sort = sort;
-        self
-    }
-    pub fn path(mut self, path: String) -> Self {
-        self.path = path;
-        self
-    }
-    pub fn name(mut self, name: String) -> Self {
-        self.name = name;
-        self
-    }
-    pub fn desc(mut self, desc: String) -> Self {
-        self.desc = "NA".to_string();
-        self
-    }
-    pub fn category(mut self, category: String) -> Self {
-        self.category = category;
-        self
-    }
-    pub fn status(mut self, status: ProjectStatus) -> Self {
-        self.status = status;
-        self
-    }
-    pub fn is_git(mut self, is_git: bool) -> Self {
-        self.is_git = is_git;
-        self
-    }
-    pub fn owner(mut self, owner: String) -> Self {
-        self.owner = owner;
-        self
-    }
-    pub fn repo(mut self, repo: String) -> Self {
-        self.repo = repo;
-        self
-    }
-    pub fn last_commit(mut self, last_commit: String) -> Self {
-        self.last_commit = last_commit;
-        self
-    }
-    pub fn todos(mut self, todos: Vec<Todo>) -> Self {
-        self.todos = todos;
-        self
-    }
-    pub fn build(self) -> Project {
-        Project {
-            id: self.id, // TODO default
-            parent_id: None,
-            child_ids: vec![],
-            sort: self.sort,
-            path: self.path,
-            name: self.name,
-            desc: self.desc,
-            category: self.category,
-            status: self.status,
-            is_git: self.is_git,
-            owner: self.owner,
-            repo: self.repo,
-            last_commit: self.last_commit,
-            todos: self.todos,
-        }
-    }
-}
-
+// TODO I don't think we're doing nested list impl anymore but lets get it working first
 impl NestedTableItems<Project> {
     pub fn load() -> NestedTableItems<Project> {
+        let projects = Project::load();
+        let substate_count = projects.iter().nth(0).map(|p| p.todos.len()).unwrap_or(0);
         NestedTableItems {
-            items: Project::load(),
+            items: projects,
             state: TableState::default(),
-            substateCount: 0,
-            substate: ListState::default(),
+            substate_count: substate_count,
+            substate: TableState::default(),
         }
+    }
+
+    pub fn update_substate_count(&mut self) {
+        let substate_count = self.current().map(|p| p.get_todos_len()).unwrap_or(0);
+        self.set_substate_count(substate_count);
+
+        if substate_count == 0 {
+            self.substate = TableState::default()
+        } else {
+            self.substate.select(Some(0))
+        };
+    }
+    pub fn project_next(&mut self) {
+        self.next();
+        self.update_substate_count();
+    }
+    pub fn project_previous(&mut self) {
+        self.previous();
+        self.update_substate_count();
     }
     pub fn current(&self) -> Option<&Project> {
         match self.get_state_selected() {
@@ -181,13 +129,22 @@ impl NestedTableItems<Project> {
                 .current()
                 .iter()
                 .nth(idx)
-                .and_then(|&&p| p.todos.iter().nth(idy)),
+                .and_then(|p| p.todos.iter().nth(idy)),
             _ => None,
         }
     }
-    pub fn current_todos(&self) -> Option<Vec<Todo>> {
-        self.current().and_then(|p| Some(p.todos))
+    // pub fn current_todo_state(&self) -> (Option<usize>, Option<&Todo>) {
+
+    // }
+    pub fn current_todos(&self) -> Option<&Vec<Todo>> {
+        self.current().and_then(|p| Some(&p.todos))
     }
+
+    // pub fn current_full_state(&self) -> (Option<usize>, Option<usize>, Option<&Project>) {
+
+    // }
+
+    //
     pub fn toggle(&mut self) {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
@@ -212,14 +169,3 @@ impl fmt::Display for ProjectStatus {
         write!(f, "{:?}", self)
     }
 }
-
-// TODO refactor to include-sql
-// TODO remove FromSql
-// impl FromSql for ProjectStatus {
-//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-//         value
-//             .as_str()?
-//             .parse::<ProjectStatus>()
-//             .map_err(|e| FromSqlError::Other(Box::new(e)))
-//     }
-// }

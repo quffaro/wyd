@@ -3,7 +3,7 @@ use crate::app::structs::config::load_config;
 // https://applied-math-coding.medium.com/
 // use std::cell::RefCell;
 // use std::rc::Rc;
-use super::{ListNav, ListState, PlainListItems};
+use super::{ListItems, ListNav, ListState};
 use ratatui::style::Color;
 use std::fmt;
 use strum::IntoEnumIterator;
@@ -45,7 +45,7 @@ impl Window {
     pub fn to_search(&mut self) {
         self.base = BaseWindow::Search
     }
-    /// WINDOW RULES
+    // WINDOW RULES
     pub fn popup(&mut self, popup: Popup, mode: Option<Mode>) {
         self.popup = popup;
         match mode {
@@ -97,9 +97,9 @@ impl fmt::Display for BaseWindow {
     }
 }
 
-impl PlainListItems<BaseWindow> {
-    fn _new() -> PlainListItems<BaseWindow> {
-        PlainListItems {
+impl ListItems<BaseWindow> {
+    fn new() -> ListItems<BaseWindow> {
+        ListItems {
             items: BaseWindow::iter().collect(),
             state: ListState::default(),
         }

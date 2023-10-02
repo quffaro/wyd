@@ -1,8 +1,5 @@
-use super::{ListNav, ListState};
-use crate::{
-    app::structs::projects::Project,
-    json::{category::read_category, project::update_project_category},
-};
+use super::{ListItems, ListNav, ListState};
+use crate::app::structs::projects::Project;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -20,13 +17,15 @@ impl fmt::Display for Category {
 
 impl Category {
     pub fn load() -> Vec<Category> {
-        read_category().expect("READ CATEGORY ERROR")
+        // TODO
+        vec![]
+        // read_category().expect("READ CATEGORY ERROR")
     }
 }
 
-impl PlainListItems<Category> {
+impl ListItems<Category> {
     pub fn load() -> ListItems<Category> {
-        PlainListItems {
+        ListItems {
             items: Category::load(),
             state: ListState::default(),
         }
@@ -42,7 +41,8 @@ impl PlainListItems<Category> {
         let selected = self.state.selected().unwrap();
         for i in 0..self.items.len() {
             if i == selected {
-                update_project_category(project, &self.items[i].name); // TODO not the best!
+                // update_project_category(project, &self.items[i].name);
+                // TODO not the best!
             } else {
                 continue;
             }
