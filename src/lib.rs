@@ -11,23 +11,13 @@ pub mod event;
 pub mod tui;
 
 /// Event handler.
-pub mod handler;
+// TODO
+// pub mod handler;
 
-/// SQL scripts
-pub mod sql;
-
-/// Request 
+/// Request
 pub mod request;
 
 const CONFIG: &str = "/.config/wyd/";
-const PAT: &str = "pat.txt";
-const DB: &str = "wyd.db";
-const WYD_CONFIG: &str = "config";
-
-pub const PATH_PAT: &str = formatcp!("{}{}", CONFIG, PAT);
-pub const PATH_DB: &str = formatcp!("{}{}", CONFIG, DB);
-pub const PATH_CONFIG: &str = formatcp!("{}{}", CONFIG, WYD_CONFIG);
-
 
 pub const GITCONFIG_SUFFIX: &str = ".git/config";
 pub const GLOB_GITCONFIG_SUFFIX: &str = formatcp!("**/{}", GITCONFIG_SUFFIX);

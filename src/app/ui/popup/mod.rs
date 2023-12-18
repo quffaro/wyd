@@ -1,10 +1,10 @@
 use crate::app::structs::{
-    config::{Config, WydColor},
-    windows::{BaseWindow, Mode, WindowStatus},
+    // config::{Config, WydColor},
+    focus::{Mode, WindowBase, WindowPopup, WindowStatus},
     ListNav,
 };
 use crate::app::ui::{centered_rect, centered_rect_category, centered_rect_config};
-use crate::app::{App, Popup};
+use crate::app::App;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX};
 use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -26,7 +26,7 @@ pub fn render_popup_new_project<'a, B: Backend>(app: &mut App, frame: &mut Frame
     let width = area.width.max(3) - 3;
     let scroll = app.input.visual_scroll(width as usize);
     let text = Paragraph::new(app.input.value())
-        .style(Style::default().fg(match app.window.mode {
+        .style(Style::default().fg(match app.focus.mode {
             Mode::Insert => Color::Yellow,
             Mode::Normal => Color::Green,
         }))
@@ -39,7 +39,7 @@ pub fn render_popup_new_project<'a, B: Backend>(app: &mut App, frame: &mut Frame
         );
 
     frame.render_widget(text, area);
-    match app.window.mode {
+    match app.focus.mode {
         Mode::Normal => {}
         Mode::Insert => frame.set_cursor(
             area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
@@ -63,7 +63,7 @@ pub fn render_theme_picker<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) 
         .block(Block::default().title("(select highlight theme)"))
         .highlight_style(
             Style::default()
-                .fg(app.window.mode_color())
+                .fg(app.focus.mode_color())
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
@@ -81,7 +81,7 @@ pub fn render_popup_delete_project<'a, B: Backend>(app: &mut App, frame: &mut Fr
     // OWNER
     let text = Paragraph::new(format!(
         "Are you sure you want to delete {}?",
-        app.projects.current().unwrap().name
+        app.data.current().unwrap().name
     ))
     .wrap(Wrap { trim: false })
     .block(
@@ -105,9 +105,9 @@ pub fn render_popup_delete_project<'a, B: Backend>(app: &mut App, frame: &mut Fr
     let tabs = Tabs::new(choices)
         .block(Block::default().borders(Borders::ALL).title(format!(
             "(are you sure you want to delete {}?",
-            app.projects.current().unwrap().name
+            app.data.current().unwrap().name
         )))
-        .select(app.index)
+        .select(app.index as usize)
         .style(Style::default().fg(Color::Cyan))
         .highlight_style(
             Style::default()
@@ -130,7 +130,7 @@ pub fn render_popup_wyd_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<
     let width = area.width.max(3) - 3;
     let scroll = app.input.visual_scroll(width as usize);
     let text = Paragraph::new(app.input.value())
-        .style(Style::default().fg(match app.window.mode {
+        .style(Style::default().fg(match app.focus.mode {
             Mode::Insert => Color::Yellow,
             Mode::Normal => Color::Green,
         }))
@@ -144,7 +144,7 @@ pub fn render_popup_wyd_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<
 
     // SEARCH DIRECTORY
     frame.render_widget(text, area);
-    match app.window.mode {
+    match app.focus.mode {
         Mode::Normal => {}
         Mode::Insert => frame.set_cursor(
             area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
@@ -154,7 +154,7 @@ pub fn render_popup_wyd_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<
 }
 
 pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
-    match app.projects.current() {
+    match app.data.current() {
         Some(_) => {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
@@ -164,27 +164,30 @@ pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_,
 
             let category_block = Block::default()
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.window.popup == Popup::EditCat {
-                    Color::Yellow
-                } else {
-                    Color::Gray
-                }))
+                .style(
+                    Style::default().fg(if app.focus.popup == WindowPopup::EditCat {
+                        Color::Yellow
+                    } else {
+                        Color::Gray
+                    }),
+                )
                 .title("(edit category)")
                 .border_type(BorderType::Plain);
 
-            let categories: Vec<ListItem> = app
-                .categories
-                .items
-                .iter()
-                .map(|t| ListItem::new(format!("{}", t.name)))
-                .collect();
+            let categories: Vec<ListItem> = vec![];
+            // app
+            // .categories
+            // .items
+            // .iter()
+            // .map(|t| ListItem::new(format!("{}", t.name)))
+            // .collect();
 
             // IF THERE ARE NONE
             let category_list = List::new(categories)
                 .block(category_block)
                 .highlight_style(
                     Style::default()
-                        .fg(app.window.mode_color())
+                        .fg(app.focus.mode_color())
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol(">> ");
@@ -193,9 +196,9 @@ pub fn render_popup_new_cat<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_,
 
             let text = Paragraph::new(app.input.value())
                 .style(
-                    Style::default().fg(match (app.window.popup, app.window.mode) {
-                        (Popup::NewCat, Mode::Insert) => Color::Yellow,
-                        (Popup::NewCat, Mode::Normal) => Color::Green,
+                    Style::default().fg(match (app.focus.popup, app.focus.mode) {
+                        (WindowPopup::NewCat, Mode::Insert) => Color::Yellow,
+                        (WindowPopup::NewCat, Mode::Normal) => Color::Green,
                         _ => Color::Gray,
                     }),
                 )
@@ -262,11 +265,13 @@ pub fn render_popup_help_table<'a, B: Backend>(app: &App, frame: &mut Frame<'_, 
             Block::default()
                 .title("(help)")
                 .borders(Borders::ALL)
-                .style(Style::default().fg(if app.window.popup == Popup::Help {
-                    Color::Yellow
-                } else {
-                    Color::Gray
-                }))
+                .style(
+                    Style::default().fg(if app.focus.popup == WindowPopup::Help {
+                        Color::Yellow
+                    } else {
+                        Color::Gray
+                    }),
+                )
                 .border_type(BorderType::Plain),
         )
         .header(Row::new(vec!["Key", "Desc"]))
@@ -275,88 +280,84 @@ pub fn render_popup_help_table<'a, B: Backend>(app: &App, frame: &mut Frame<'_, 
     frame.render_widget(help, area)
 }
 
-pub fn render_popup_search_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
-    // TODO performance
+// pub fn render_popup_search_config<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
+//     // TODO performance
 
-    let size = frame.size();
-    let area = centered_rect(80, 40, size);
-    frame.render_widget(Clear, area); //this clears out the background
+//     let size = frame.size();
+//     let area = centered_rect(80, 40, size);
+//     frame.render_widget(Clear, area); //this clears out the background
 
-    // which popup is decided here
-    let popup = render_popup_config_paths(&app);
-    frame.render_stateful_widget(popup, area, &mut app.configs.state);
-}
+//     // which popup is decided here
+//     let popup = render_popup_config_paths(&app);
+//     frame.render_stateful_widget(popup, area, &mut app.configs.state);
+// }
 
-fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
-    // TODO simplify
-    let rows: Vec<Row> = app
-        .configs
-        .items
-        .iter()
-        .map(|p| {
-            // TODO fix
-            let y = p
-                .path
-                // .replace(&home_path(), ".../")
-                .replace("/.git.config", "")
-                .clone();
-            Row::new(vec![match p.is_selected {
-                true => Cell::from(format!("[x] {}", y)),
-                false => Cell::from(format!("[ ] {}", y)),
-            }])
-        })
-        .collect();
+// fn render_popup_config_paths<'a>(app: &App) -> Table<'a> {
+//     // TODO simplify
+//     let rows: Vec<Row> = app
+//         .configs
+//         .items
+//         .iter()
+//         .map(|p| {
+//             // TODO fix
+//             let y = p
+//                 .path
+//                 // .replace(&home_path(), ".../")
+//                 .replace("/.git.config", "")
+//                 .clone();
+//             Row::new(vec![match p.is_selected {
+//                 true => Cell::from(format!("[x] {}", y)),
+//                 false => Cell::from(format!("[ ] {}", y)),
+//             }])
+//         })
+//         .collect();
 
-    let title = format!(
-        "{} {}/{}",
-        "Possible",
-        app.configs.state.selected().map_or_else(|| 0, |x| x + 1),
-        rows.len()
-    );
+//     let title = format!(
+//         "{} {}/{}",
+//         "Possible",
+//         app.configs.state.selected().map_or_else(|| 0, |x| x + 1),
+//         rows.len()
+//     );
 
-    let paths = Table::new(rows)
-        .style(Style::default().fg(Color::White))
-        .block(
-            Block::default()
-                .title(title)
-                .borders(Borders::ALL)
-                .style(
-                    Style::default()
-                        .fg(app.window.mode_color())
-                        .bg(Color::Black),
-                )
-                .border_type(BorderType::Plain),
-        )
-        .widths(&[Constraint::Percentage(100)])
-        .highlight_style(
-            Style::default()
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(" >>");
+//     let paths = Table::new(rows)
+//         .style(Style::default().fg(Color::White))
+//         .block(
+//             Block::default()
+//                 .title(title)
+//                 .borders(Borders::ALL)
+//                 .style(Style::default().fg(app.focus.mode_color()).bg(Color::Black))
+//                 .border_type(BorderType::Plain),
+//         )
+//         .widths(&[Constraint::Percentage(100)])
+//         .highlight_style(
+//             Style::default()
+//                 .bg(Color::Black)
+//                 .add_modifier(Modifier::BOLD),
+//         )
+//         .highlight_symbol(" >>");
 
-    paths
-}
+//     paths
+// }
 
 pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
-    match app.projects.current() {
+    match app.data.current() {
         Some(p) => {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
             frame.render_widget(Clear, area);
 
-            match app.is_popup_loading {
-                true => {
-                    app.input = tui_input::Input::new(p.desc.clone());
-                    app.is_popup_loading = false;
-                }
-                _ => {}
-            }
+            // match app.is_popup_loading {
+            //     true => {
+            //         app.input = tui_input::Input::new(p.desc.clone());
+            //         app.is_popup_loading = false;
+            //     }
+            //     _ => {}
+            // }
 
             let width = area.width.max(3) - 3;
             let scroll = app.input.visual_scroll(width as usize);
             let text = Paragraph::new(app.input.value())
-                .style(Style::default().fg(match app.window.mode {
+                .style(Style::default().fg(match app.focus.mode {
                     Mode::Insert => Color::Yellow,
                     Mode::Normal => Color::Green,
                 }))
@@ -369,7 +370,7 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
                 );
 
             frame.render_widget(text, area);
-            match app.window.mode {
+            match app.focus.mode {
                 Mode::Normal => {}
                 Mode::Insert => frame.set_cursor(
                     area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,
@@ -389,7 +390,7 @@ pub fn render_popup_edit_desc<'a, B: Backend>(app: &mut App, frame: &mut Frame<'
 }
 
 pub fn render_popup_read_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
-    match app.todos.current() {
+    match app.data.current() {
         Some(t) => {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
@@ -397,15 +398,17 @@ pub fn render_popup_read_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B
             let width = area.width.max(3) - 3;
             let scroll = app.input.visual_scroll(width as usize);
 
-            let text = Paragraph::new(t.todo.clone())
-                .style(Style::default().fg(Color::Yellow))
-                .wrap(Wrap { trim: false })
-                .block(
-                    Block::default()
-                        .title("(read todo)")
-                        .title_alignment(Alignment::Left)
-                        .borders(Borders::ALL),
-                );
+            let text = Paragraph::new(
+                "meme", // t.todo.clone()
+            )
+            .style(Style::default().fg(Color::Yellow))
+            .wrap(Wrap { trim: false })
+            .block(
+                Block::default()
+                    .title("(read todo)")
+                    .title_alignment(Alignment::Left)
+                    .borders(Borders::ALL),
+            );
 
             frame.render_widget(text, area);
             // match app.window.mode {
@@ -427,7 +430,7 @@ pub fn render_popup_read_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B
     }
 }
 pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
-    match app.projects.current() {
+    match app.data.current() {
         Some(_) => {
             let size = frame.size();
             let area = centered_rect(40, 40, size);
@@ -436,7 +439,7 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
             let scroll = app.input.visual_scroll(width as usize);
 
             let text = Paragraph::new(app.input.value())
-                .style(Style::default().fg(match app.window.mode {
+                .style(Style::default().fg(match app.focus.mode {
                     Mode::Insert => Color::Yellow,
                     Mode::Normal => Color::Green,
                 }))
@@ -449,7 +452,7 @@ pub fn render_popup_todo<'a, B: Backend>(app: &App, frame: &mut Frame<'_, B>) {
                 );
 
             frame.render_widget(text, area);
-            match app.window.mode {
+            match app.focus.mode {
                 Mode::Normal => {}
                 Mode::Insert => frame.set_cursor(
                     area.x + ((app.input.visual_cursor()).max(scroll) - scroll) as u16 + 1,

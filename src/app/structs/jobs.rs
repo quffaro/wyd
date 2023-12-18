@@ -5,7 +5,7 @@ pub struct JobRoster {
 }
 
 impl JobRoster {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self {
             gitcommit: LoadingState::Loading,
             gitconfig: LoadingState::Loading,

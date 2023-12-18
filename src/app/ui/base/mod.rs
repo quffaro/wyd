@@ -1,10 +1,10 @@
 use crate::app::structs::{
-    config::{Config, WydColor},
-    windows::{BaseWindow, Mode, WindowStatus},
+    // config::{Config, WydColor},
+    focus::{Mode, WindowBase, WindowPopup},
     ListNav,
 };
 use crate::app::ui::wyd_to_color;
-use crate::app::{App, Popup};
+use crate::app::App;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX};
 use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -24,8 +24,8 @@ pub fn render_title_and_search<'a>(app: &App) -> (Paragraph, Paragraph) {
 }
 
 pub fn render_search<'a>(app: &App) -> Paragraph {
-    let search = match app.window.base {
-        BaseWindow::Search => app.input.value(),
+    let search = match app.focus.base {
+        WindowBase::Search => app.input.value(),
         _ => "",
     };
     Paragraph::new(search)
@@ -38,7 +38,8 @@ pub fn render_search<'a>(app: &App) -> Paragraph {
         .style(
             Style::default()
                 .fg(
-                    if app.window.base == BaseWindow::Search && app.window.popup == Popup::None {
+                    if app.focus.base == WindowBase::Search && app.focus.popup == WindowPopup::None
+                    {
                         Color::Yellow
                     } else {
                         Color::White
@@ -66,7 +67,7 @@ pub fn render_title<'a>(app: &App) -> Paragraph {
 pub fn render_projects<'a>(app: &App) -> Table<'a> {
     let home_dir = home_path(CONFIG_SEARCH_FOLDER);
     let rows: Vec<Row> = app
-        .projects
+        .data
         .items
         .iter()
         // .filter(|s| s.name.contains(app.input.value()))
@@ -78,9 +79,9 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                         .replace(GITCONFIG_SUFFIX, "") // TODO into constant
                         .clone(),
                 ),
-                Cell::from(p.category.to_string().clone()),
-                Cell::from(p.status.to_string().clone()),
-                Cell::from(p.last_commit.to_string().clone()),
+                // Cell::from(p.category.to_string().clone()),
+                // Cell::from(p.status.to_string().clone()),
+                // Cell::from(p.last_commit.to_string().clone()),
             ])
         })
         .collect();
@@ -94,8 +95,8 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
                 .style(
                     Style::default()
                         .fg(
-                            if app.window.base == BaseWindow::Project
-                                && app.window.popup == Popup::None
+                            if app.focus.base == WindowBase::Items
+                                && app.focus.popup == WindowPopup::None
                             {
                                 Color::Yellow
                             } else {
@@ -115,8 +116,8 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
         ])
         .highlight_style(
             Style::default()
-                .bg(if app.window.popup == Popup::None {
-                    if app.window.mode == Mode::Normal {
+                .bg(if app.focus.popup == WindowPopup::None {
+                    if app.focus.mode == Mode::Normal {
                         Color::Yellow
                     } else {
                         Color::Magenta
@@ -133,20 +134,22 @@ pub fn render_projects<'a>(app: &App) -> Table<'a> {
 }
 
 pub fn render_todo<'a>(app: &App) -> Table<'a> {
-    let rows: Vec<Row> = app
-        .todos
-        .filtered
-        .iter()
-        .map(|t| {
-            Row::new(vec![
-                Cell::from(match t.is_complete {
-                    true => format!("[x] {}", t.todo.clone()),
-                    false => format!("[ ] {}", t.todo.clone()),
-                }),
-                Cell::from(t.priority.to_string()),
-            ])
-        })
-        .collect();
+    let rows: Vec<Row> = vec![];
+    // app
+    // .data
+    // // .todos
+    // // .filtered
+    // .iter()
+    // .map(|t| {
+    //     Row::new(vec![
+    //         Cell::from(match t.is_complete {
+    //             true => format!("[x] {}", t.todo.clone()),
+    //             false => format!("[ ] {}", t.todo.clone()),
+    //         }),
+    //         Cell::from(t.priority.to_string()),
+    //     ])
+    // })
+    // .collect();
 
     // dbg!(&rows);
     let todos = Table::new(rows)
@@ -158,13 +161,14 @@ pub fn render_todo<'a>(app: &App) -> Table<'a> {
                 .style(
                     Style::default()
                         .fg(
-                            if app.window.base == BaseWindow::Todo
-                                && app.window.popup == Popup::None
+                            if app.focus.base == WindowBase::Todo
+                                && app.focus.popup == WindowPopup::None
                             {
-                                app.config
-                                    .clone()
-                                    .and_then(|c| Some(wyd_to_color(c.color.bd)))
-                                    .unwrap()
+                                Color::Yellow
+                                // app.config
+                                //     .clone()
+                                //     .and_then(|c| Some(wyd_to_color(c.color.bd)))
+                                //     .unwrap()
                             } else {
                                 Color::White
                             },
@@ -177,7 +181,7 @@ pub fn render_todo<'a>(app: &App) -> Table<'a> {
         .widths(&[Constraint::Percentage(90), Constraint::Percentage(10)])
         .highlight_style(
             Style::default()
-                .bg(if app.window.popup == Popup::None {
+                .bg(if app.focus.popup == WindowPopup::None {
                     Color::Yellow
                 } else {
                     Color::White
@@ -195,7 +199,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .borders(Borders::ALL)
         .style(
             Style::default()
-                .fg(if app.window.base == BaseWindow::Todo {
+                .fg(if app.focus.base == WindowBase::Todo {
                     Color::Yellow
                 } else {
                     Color::White
@@ -205,22 +209,23 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         .title("(todo)")
         .border_type(BorderType::Plain);
 
-    let todo_items: Vec<ListItem> = app
-        .todos
-        .filtered
-        .iter()
-        .map(|t| {
-            if t.is_complete {
-                ListItem::new(format!("[x] {}", t.todo.clone()))
-            } else {
-                ListItem::new(format!("[ ] {}", t.todo.clone()))
-            }
-        })
-        .collect();
+    let todo_items: Vec<ListItem> = vec![];
+    // app
+    // .data
+    // .items
+    // .iter()
+    // .map(|t| {
+    //     if t.is_complete {
+    //         ListItem::new(format!("[x] {}", t.todo.clone()))
+    //     } else {
+    //         ListItem::new(format!("[ ] {}", t.todo.clone()))
+    //     }
+    // })
+    // .collect();
 
     let left = List::new(todo_items).block(todo_block).highlight_style(
         Style::default()
-            .fg(if app.window.base == BaseWindow::Todo {
+            .fg(if app.focus.base == WindowBase::Todo {
                 Color::Yellow
             } else {
                 Color::White
@@ -229,8 +234,8 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let project_desc = match app.projects.get_state_selected() {
-        Some(i) => match app.projects.items.iter().nth(i) {
+    let project_desc = match app.data.get_state_selected() {
+        Some(i) => match app.data.items.iter().nth(i) {
             Some(p) => p.desc.to_owned(),
             None => "".to_owned(),
         },
@@ -245,7 +250,7 @@ pub fn render_todo_and_desc<'a>(app: &App) -> (List<'a>, Paragraph<'a>) {
         )
         .style(
             Style::default()
-                .fg(if app.window.base == BaseWindow::Description {
+                .fg(if app.focus.base == WindowBase::Description {
                     Color::Yellow
                 } else {
                     Color::White

@@ -1,10 +1,10 @@
-use super::LoadingState;
+// use super::LoadingState;
 use crate::app::structs::{
     config::{Config, WydColor},
-    windows::{BaseWindow, Mode, WindowStatus},
+    focus::{Mode, WindowBase},
     ListNav,
 };
-use crate::app::{App, Popup};
+use crate::app::App;
 use crate::{home_path, CONFIG_SEARCH_FOLDER, GITCONFIG_SUFFIX};
 use ratatui::backend::Backend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};

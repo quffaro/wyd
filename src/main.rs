@@ -1,7 +1,5 @@
-use ini::Ini;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use rusqlite::Connection;
 use std::str::FromStr;
 use std::{io, thread};
 use wyd::app::{structs::config::WydColor, App, AppResult};
@@ -11,25 +9,9 @@ use wyd::tui::Tui;
 use wyd::{home_path, PATH_CONFIG, PATH_DB};
 
 fn main() -> AppResult<()> {
-    // intiialize db
-    let conn = Connection::open(home_path(PATH_DB)).unwrap();
-    wyd::sql::initialize_db(&conn)?;
-
-    // Create an application.
+    // create an application
     let mut app = App::load();
     app.default_select();
-
-    //     match Ini::load_from_file(home_path(PATH_CONFIG)) {
-    //         Ok(c) => {
-    //             let y = wyd::app::structs::config::get_config_color(c);
-    //             dbg!(y);
-    //             Ok(())
-    //         }
-    //         Err(_) => Ok(()),
-    //     }
-
-    // init
-    thread::spawn(|| wyd::sql::tmp_config::init_tmp_git_config());
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());

@@ -1,12 +1,8 @@
 use ratatui::widgets::{ListState, TableState};
 
-pub mod category;
-pub mod config;
-pub mod gitconfig;
+pub mod focus;
+pub mod items;
 pub mod jobs;
-pub mod projects;
-pub mod todos;
-pub mod windows;
 
 pub trait ListNav {
     fn default() -> Self;
@@ -36,56 +32,6 @@ pub trait ListNav {
     }
     fn unselect(&mut self) {
         self.select_state(None);
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PlainListItems<T> {
-    pub items: Vec<T>,
-    pub state: ListState,
-}
-
-impl<T> ListNav for PlainListItems<T> {
-    fn default() -> PlainListItems<T> {
-        PlainListItems {
-            items: vec![],
-            state: ListState::default(),
-        }
-    }
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.items.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct FilteredListItems<T> {
-    pub items: Vec<T>,
-    pub filtered: Vec<T>,
-    pub state: TableState,
-}
-
-impl<T> ListNav for FilteredListItems<T> {
-    fn default() -> FilteredListItems<T> {
-        FilteredListItems {
-            items: vec![],
-            filtered: vec![],
-            state: TableState::default(),
-        }
-    }
-    fn get_items_len<'a>(&'a self) -> usize {
-        self.filtered.len()
-    }
-    fn get_state_selected<'a>(&'a self) -> Option<usize> {
-        self.state.selected()
-    }
-    fn select_state<'a>(&'a mut self, idx: Option<usize>) {
-        self.state.select(idx)
     }
 }
 
